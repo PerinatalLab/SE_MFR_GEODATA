@@ -15,10 +15,12 @@ library(RColorBrewer)  # color pallete library
 
 # load the geolocation data (coordinates, names, codes, areas)
 fun_loadGeo = function(geo_dir) {
+        geo_dir = normalizePath(geo_dir, winslash = "\\", mustWork = NA)
         file_name = unlist(strsplit(list.files(geo_dir)[4],"\\."))[1]
-        dsn <<- readOGR(dsn=".",layer=file_name)
-        rm(file_name)
+        dsn <<- readOGR(dsn=geo_dir,layer=file_name)
+        rm(file_name,geo_dir)
 }
+
 
 fun_sweden = function(dsn,geo_data,variable_name) {
         
@@ -163,9 +165,10 @@ fun_sweden = function(dsn,geo_data,variable_name) {
                 
                 ## draw the legend (values for each color)
                 x = dsn@bbox[1,2] - (dsn@bbox[1,2]-dsn@bbox[1,1])*0.35
-                y = dsn@bbox[2,2] - (dsn@bbox[2,2]-dsn@bbox[2,1])*0.44
-                legend(x,y,names(table(cut(geo_data[,variable_name],10))),
-                       lwd=10,col=brewer.pal(10, "Spectral"),box.col = 0,cex=0.6)
+                y = dsn@bbox[2,2] - (dsn@bbox[2,2]-dsn@bbox[2,1])*0.43
+                l = c(names(table(cut(geo_data[,variable_name],10))),"nonsignificant")
+                r = c(col=brewer.pal(10, "Spectral"),"lightgrey")
+                legend(x=x,y=y,legend=l,lwd=10,col=r,box.col = 0,cex=0.6)
                 
                 # restore the default plotting parameters
                 par(mar=c(5.1, 4.1, 4.1, 2.1))
