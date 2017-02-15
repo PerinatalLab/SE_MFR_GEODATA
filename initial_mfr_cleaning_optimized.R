@@ -38,5 +38,5 @@ ratedf = bind_rows(ratedf, getRate(m, "mat_age"))
 m = filter(m, MLANGD>=140 & MLANGD<=210)
 ratedf = bind_rows(ratedf, getRate(m, "mat_height"))
 
-write.table(m, "tmp/mfr_edu_clean.csv", sep=",", quote=F, row.names=F, col.names=T)
+write.table(m, "tmp/mfr_edu_clean.csv", sep=";", quote=F, row.names=F, col.names=T)
 write.table(ratedf, "tmp/cleaning_loss.txt", sep="\t", quote=F, row.names=F, col.names=T)
