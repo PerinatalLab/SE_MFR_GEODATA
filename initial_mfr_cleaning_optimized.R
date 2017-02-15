@@ -5,11 +5,16 @@ getRate = function(df, st){
         data.frame(summarize(df, rate=mean(GRDBS<259, na.rm=T), n=n()), stage=st)
 }
 
-mfr = read.table("~/Documents/swed_mfr_games/mfr_sarah_maxi_2016june10.csv", h=T, sep=",")
+setwd("~/Documents/postal_codes/")
+mfr = read.table("mfr_sarah_maxi_2016june10.csv", h=T, sep=",")
 ratedf = getRate(mfr, "initial")
 
 m = filter(mfr, !is.na(lpnr_BARN), !is.na(lpnr_mor))
 ratedf = bind_rows(ratedf, getRate(m, "missing_ids"))
+
+edu = read.table("education_all.txt", h=T)
+e = filter(edu, EDU!="*")
+m = left_join(m, e, by=c("lpnr_mor"="ID", "AR"="YEAR"))
 
 m = filter(m, BORDF2==1)
 ratedf = bind_rows(ratedf, getRate(m, "singletons"))
@@ -33,17 +38,5 @@ ratedf = bind_rows(ratedf, getRate(m, "mat_age"))
 m = filter(m, MLANGD>=140 & MLANGD<=210)
 ratedf = bind_rows(ratedf, getRate(m, "mat_height"))
 
-m = filter(m, is.na(NJURSJUK), is.na(EPILEPSI), is.na(ULCOLIT), is.na(SLE), is.na(HYPERTON))
-ratedf = bind_rows(ratedf, getRate(m, "mat_conditions"))
-
-m = filter(m, is.na(TSECTIO) | TSECTIO!=1)
-ratedf = bind_rows(ratedf, getRate(m, "prev_sectio"))
-
-m = filter(m, is.na(FLINDUKT), !is.na(FLSPONT))
-ratedf = bind_rows(ratedf, getRate(m, "spontaneous"))
-
-m = filter(m, ELEKAKUT==2 | (is.na(ELEKAKUT) & is.na(SECFORE)))
-ratedf = bind_rows(ratedf, getRate(m, "curr_sectio"))
-
-ratedf
-
+write.table(m, "tmp/mfr_edu_clean.csv", sep=",", quote=F, row.names=F, col.names=T)
+write.table(ratedf, "tmp/cleaning_loss.txt", sep="\t", quote=F, row.names=F, col.names=T)
