@@ -1,53 +1,66 @@
 library(rgdal)  # geolocation library
 library(RColorBrewer)  # color pallete library
+library(scales) # for rescaling alphas
+options(stringsAsFactors = F)
 
 # load the geolocation data (coordinates, names, codes, areas)
-fun_loadGeo = function(geo_dir) {
-  geo_dir = normalizePath(geo_dir, winslash = "\\", mustWork = NA)
-  file_name = unlist(strsplit(list.files(geo_dir)[4],"\\."))[1]
-  dsn <<- readOGR(dsn=geo_dir,layer=file_name)
-  rm(file_name,geo_dir)
-}
-
-fun_sweden = function(dsn, geo_data, variable_name, ownPalette) {
-  
-  ### "geo_data" is a data frame. it MUST contain:
-  # 1) a column named "lan_kom" (4-digit municipality codes, encoded as character)
-  # 2) a column variable_name that contains a mean value of something for each municipality
-  # 3) should contain ~300 rows (as many as there are municipalities)
-  ### ownPalette is a brewer.pal object
-  
-  if (missing(dsn)) {
-    cat("missing geoData object. run \"fun_loadGeo()\" function first!")
-  } else {
+fun_loadGeo = function(geo_dir, geo_data, variable_name, ownPalette) {
+    ### "geo_data" is a data frame. it MUST contain:
+    # 1) a column named "lan_kom" (4-digit municipality codes, encoded as character)
+    # 2) a column variable_name that contains a mean value of something for each municipality
+    # 3) should contain ~300 rows (as many as there are municipalities)
+    ### ownPalette is a brewer.pal object
+    
+    geo_dir = normalizePath(geo_dir, winslash = "\\", mustWork = NA)
+    file_name = unlist(strsplit(list.files(geo_dir)[4],"\\."))[1]
+    dsn = readOGR(dsn=geo_dir, layer=file_name)
+    
+    if (missing(dsn)) {
+        cat("missing geoData object!")
+        return()
+    }
     if (missing(geo_data)|missing(variable_name)) {
-      if (missing(geo_data)) {
-        cat("missing geo_data object! ")
-      }
-      if (missing(variable_name)) {
-        cat("missing variable_name! ")
-      }
-      cat("random data will be generated and used.")
-      geo_data=data.frame(lan_kom=dsn$KnKod,dummy_pheno=rnorm(nrow(dsn)),stringsAsFactors=F)
-      variable_name = "dummy_pheno"
+        if (missing(geo_data)) {
+            cat("missing geo_data object! ")
+        }
+        if (missing(variable_name)) {
+            cat("missing variable_name! ")
+        }
+        cat("random data will be generated and used.")
+        geo_data=data.frame(lan_kom=dsn$KnKod, dummy_pheno=rnorm(nrow(dsn)))
+        variable_name = "dummy_pheno"
     }
     
     # assign a color value to each geo-area
-    tmp1 = data.frame(lan_kom=dsn$KnKod,seq=seq(length(dsn$KnKod)),stringsAsFactors = F)
+    tmp1 = data.frame(lan_kom=dsn$KnKod, seq=seq(length(dsn$KnKod)))
     tmp2 = merge(tmp1,geo_data,by="lan_kom",all.x=T)
     tmp2 = tmp2[order(tmp2$seq),]
     colr = as.character(cut(tmp2[,variable_name],10,labels=ownPalette))
-    rm(tmp1,tmp2)
-    
+
     # assign areas with no value some specific color
-    colr[which(is.na(colr))]="lightgrey"
+    colr[which(is.na(colr))] = "lightgrey"
+    
+    ## get the legend labels, reformat as % if it's PTD rates
+    rangeLegend = levels(cut(tmp2[,variable_name],10))
+    if(max(geo_data[,variable_name]) < 1){
+        rangeLegend = sapply(regmatches(rangeLegend, gregexpr("0.[0-9]+", rangeLegend)),
+                             function(x) sprintf("%.2f-%.2f %%", as.numeric(x[1])*100, as.numeric(x[2])*100))
+    }
+    
+    return(list(dsn=dsn, colr=colr, rangeLegend=rangeLegend))
+}
+
+fun_sweden = function(globals, na_legend) {
+    dsn = globals$dsn
+    colr = globals$colr
+    rangeLegend = globals$rangeLegend
     
     # settings for plotting
     par(mai=c(0,0,0,0))
     par(oma=c(0,2,0,0))
     
     # plot geography with values for each area
-    plot(dsn,col=colr,lwd=0.3) #main=variable_name,
+    plot(dsn,col=colr,lwd=0.3)
     
     # some geo-areas will be plotted separately. mask them from the current plot
     no_polt_ix = which(substr(dsn$KnKod,1,2) %in% c("01","12","14"))
@@ -155,54 +168,29 @@ fun_sweden = function(dsn, geo_data, variable_name, ownPalette) {
     ## draw the legend (values for each color)
     x = dsn@bbox[1,2] - (dsn@bbox[1,2]-dsn@bbox[1,1])*0.15
     y = dsn@bbox[2,2] - (dsn@bbox[2,2]-dsn@bbox[2,1])*0.43
-    rangeLegend = levels(cut(geo_data[,variable_name],10))
     
-    ## reformat the numbers as % if it's PTD rates
-    if(max(geo_data[,variable_name]) < 0.1){
-        rangeLegend = sapply(regmatches(rangeLegend, gregexpr("0.[0-9]+", rangeLegend)),
-               function(x) sprintf("%.2f-%.2f %%", as.numeric(x[1])*100, as.numeric(x[2])*100))
+    ## add legend label for NAs, if any
+    if(!is.na(na_legend)){
+        l = c(rangeLegend, na_legend)
+        p = c(ownPalette, "lightgrey")
+    } else {
+        l = rangeLegend
+        p = ownPalette
     }
-    
-    l = c(rangeLegend, paste("<", n_cutoff, " cases", sep="")) ####   LEGEND PART
-    r = c(col=ownPalette, "lightgrey")
-    legend(x=x,y=y,legend=l,lwd=10,col=r,box.col = 0,cex=0.6)
+    legend(x=x,y=y,legend=l,lwd=10,col=p,box.col = 0,cex=0.6)
     
     # restore the default plotting parameters
     par(mar=c(5.1, 4.1, 4.1, 2.1))
-    
-  }
 }
 
 
 #######################  STOCKHOLM AREA
 
-fun_stockholm = function(dsn, geo_data, variable_name, ownPalette) {
+fun_stockholm = function(globals) {
+    dsn = globals$dsn
+    colr = globals$colr
+    rangeLegend = globals$rangeLegend
 
-  if (missing(dsn)) {
-    cat("missing geoData object. run \"fun_loadGeo()\" function first!")
-  } else {
-    if (missing(geo_data)|missing(variable_name)) {
-      if (missing(geo_data)) {
-        cat("missing geo_data object! ")
-      }
-      if (missing(variable_name)) {
-        cat("missing variable_name! ")
-      }
-      cat("random data will be generated and used.")
-      geo_data=data.frame(lan_kom=dsn$KnKod,dummy_pheno=rnorm(nrow(dsn)),stringsAsFactors=F)
-      variable_name = "dummy_pheno"
-    }
-    
-    # assign a color value to each geo-area
-    tmp1 = data.frame(lan_kom=dsn$KnKod,seq=seq(length(dsn$KnKod)),stringsAsFactors = F)
-    tmp2 = merge(tmp1,geo_data,by="lan_kom",all.x=T)
-    tmp2 = tmp2[order(tmp2$seq),]
-    colr = as.character(cut(tmp2[,variable_name],10,labels=ownPalette))
-    rm(tmp1,tmp2)
-    
-    # assign areas with no value some specific color
-    colr[which(is.na(colr))]="lightgrey"
-    
     # settings for plotting
     par(mai=c(0,0,0,0))
     #par(oma=c(0,0,0,0))
@@ -223,7 +211,6 @@ fun_stockholm = function(dsn, geo_data, variable_name, ownPalette) {
     }
     #text(ccord$x,ccord$y,ccord$code,cex=0.7)
     Encoding(ccord$name) = "UTF-8"
-    
     
     # areas that will be plotted next to the map but not in the legend
     codes_right = c("0188","0117","0187","0186","0120","0138","0136","0192")
@@ -269,38 +256,15 @@ fun_stockholm = function(dsn, geo_data, variable_name, ownPalette) {
     
     # restore the default plotting parameters
     par(mar=c(5.1, 4.1, 4.1, 2.1))
-  }
 }
 
 #######################  GOTHENBURG AREA
 
-fun_gothenburg = function(dsn, geo_data, variable_name, ownPalette) {
+fun_gothenburg = function(globals) {
+    dsn = globals$dsn
+    colr = globals$colr
+    rangeLegend = globals$rangeLegend
   
-  if (missing(dsn)) {
-    cat("missing geoData object. run \"fun_loadGeo()\" function first!")
-  } else {
-    if (missing(geo_data)|missing(variable_name)) {
-      if (missing(geo_data)) {
-        cat("missing geo_data object! ")
-      }
-      if (missing(variable_name)) {
-        cat("missing variable_name! ")
-      }
-      cat("random data will be generated and used.")
-      geo_data=data.frame(lan_kom=dsn$KnKod,dummy_pheno=rnorm(nrow(dsn)),stringsAsFactors=F)
-      variable_name = "dummy_pheno"
-    }
-    
-    # assign a color value to each geo-area
-    tmp1 = data.frame(lan_kom=dsn$KnKod,seq=seq(length(dsn$KnKod)),stringsAsFactors = F)
-    tmp2 = merge(tmp1,geo_data,by="lan_kom",all.x=T)
-    tmp2 = tmp2[order(tmp2$seq),]
-    colr = as.character(cut(tmp2[,variable_name],10,labels=ownPalette))
-    rm(tmp1,tmp2)
-    
-    # assign areas with no value some specific color
-    colr[which(is.na(colr))]="lightgrey"
-    
     # settings for plotting
     par(mai=c(0,0,0,0))
     par(oma=c(0,0,0,0))
@@ -397,38 +361,15 @@ fun_gothenburg = function(dsn, geo_data, variable_name, ownPalette) {
     
     # restore the default plotting parameters
     par(mar=c(5.1, 4.1, 4.1, 2.1))
-  }        
 }
 
 #######################  MALMO AREA
 
-fun_malmo = function(dsn, geo_data, variable_name, ownPalette) {
-  
-  if (missing(dsn)) {
-    cat("missing geoData object. run \"fun_loadGeo()\" function first!")
-  } else {
-    if (missing(geo_data)|missing(variable_name)) {
-      if (missing(geo_data)) {
-        cat("missing geo_data object! ")
-      }
-      if (missing(variable_name)) {
-        cat("missing variable_name! ")
-      }
-      cat("random data will be generated and used.")
-      geo_data=data.frame(lan_kom=dsn$KnKod,dummy_pheno=rnorm(nrow(dsn)),stringsAsFactors=F)
-      variable_name = "dummy_pheno"
-    }
-    
-    # assign a color value to each geo-area
-    tmp1 = data.frame(lan_kom=dsn$KnKod,seq=seq(length(dsn$KnKod)),stringsAsFactors = F)
-    tmp2 = merge(tmp1,geo_data,by="lan_kom",all.x=T)
-    tmp2 = tmp2[order(tmp2$seq),]
-    colr = as.character(cut(tmp2[,variable_name],10,labels=ownPalette))
-    rm(tmp1,tmp2)
-    
-    # assign areas with no value some specific color
-    colr[which(is.na(colr))]="lightgrey"
-    
+fun_malmo = function(globals) {
+    dsn = globals$dsn
+    colr = globals$colr
+    rangeLegend = globals$rangeLegend
+
     # settings for plotting
     par(mai=c(0,0,0,0))
     #par(oma=c(0,0,0,0))
@@ -490,24 +431,25 @@ fun_malmo = function(dsn, geo_data, variable_name, ownPalette) {
     
     # restore the default plotting parameters
     par(mar=c(5.1, 4.1, 4.1, 2.1))
-  }   
 }
 
 
 ############    plot all 4 windows 
 
-fun_plot_final = function(geo_dir, geo_data, variable_name, ownPalette) {
-  # load the geo coordinates, create an object "dsn"
-  fun_loadGeo(geo_dir)
-  # split screen into 4 windows
-  m = matrix(c(0,.7, 0,  1,    .58,1,.55,  1, 
-               .58, 1,.25,.55,   .58,1,  0,.25),
-             nr=4,nc=4,byrow = T)
-  # fill the windows with geographical/meta/medical data
-  split.screen(m)
-  screen(1); fun_sweden(dsn, geo_data, variable_name, ownPalette)
-  screen(2); fun_stockholm(dsn, geo_data, variable_name, ownPalette)
-  screen(3); fun_gothenburg(dsn, geo_data, variable_name, ownPalette)
-  screen(4); fun_malmo(dsn, geo_data, variable_name, ownPalette)
-  close.screen(all = TRUE)
+fun_plot_final = function(geo_dir, geo_data, variable_name, ownPalette, na_legend) {
+    # load the geo coordinates, assign the globals
+    globals = fun_loadGeo(geo_dir, geo_data, variable_name, ownPalette)
+    
+    # split screen into 4 windows
+    m = matrix(c(0,.7, 0,  1,    .58,1,.55,  1, 
+                 .58, 1,.25,.55,   .58,1,  0,.25),
+               nr=4,nc=4,byrow = T)
+    
+    # fill the windows with geographical/meta/medical data
+    split.screen(m)
+    screen(1); fun_sweden(globals, na_legend)
+    screen(2); fun_stockholm(globals)
+    screen(3); fun_gothenburg(globals)
+    screen(4); fun_malmo(globals)
+    close.screen(all = TRUE)
 }
