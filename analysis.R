@@ -55,7 +55,6 @@ spont$PTD_adj = spont$GA_adj<259
 
 ### SUMMARIZE AND PLOT
 ownPalette = rev(brewer.pal(10, "RdYlGn"))
-n_cutoff = 5
 
 spont = mutate(spont, lan_kom = sprintf("%04d", lan_kom)) %>%
         group_by(lan_kom)
@@ -63,18 +62,43 @@ spont_unadj = summarize(spont, ncases = sum(PTD), ncontrs = sum(!PTD), rate = su
 spont_adj = filter(spont, !is.na(PTD_adj)) %>%
         summarize(ncases = sum(PTD_adj), ncontrs = sum(!PTD_adj), rate = sum(PTD_adj)/n())
 
-spont_unadj$rate[spont_unadj$ncases < n_cutoff] = NA
-spont_adj$rate[spont_adj$ncases < n_cutoff] = NA
+## these don't exist in the map anyway
+spont_unadj$rate[spont_unadj$ncases == 0] = NA
+spont_adj$rate[spont_adj$ncases == 0] = NA
 
 spont_unadj = filter(spont_unadj, !is.na(rate))
 spont_adj = filter(spont_adj, !is.na(rate))
 
+na_legend = NA
+
 pdf("plots/FINAL_spont_unadj_PTD.pdf",width=9.5, height=8)
-fun_plot_final(geo_dir, as.data.frame(spont_unadj), "rate", ownPalette)
+fun_plot_final(geo_dir, as.data.frame(spont_unadj), "rate", ownPalette, na_legend)
 dev.off()
 
 pdf("plots/FINAL_spont_adj_PTD.pdf",width=9.5, height=8)
-fun_plot_final(geo_dir, as.data.frame(spont_adj), "rate", ownPalette)
+fun_plot_final(geo_dir, as.data.frame(spont_adj), "rate", ownPalette, na_legend)
+dev.off()
+
+### REGIONS WHICH (SORT OF) RELIABLY DIFFER FROM THE MEAN PTD RATE
+spont_adj$p = unlist(Map(function(x, n) binom.test(x, n, mean(spont$PTD_adj, na.rm=T))$p.value,
+                  spont_adj$ncases, spont_adj$ncases+spont_adj$ncontrs))
+spont_unadj$p = unlist(Map(function(x, n) binom.test(x, n, mean(spont$PTD, na.rm=T))$p.value,
+                         spont_unadj$ncases, spont_unadj$ncases+spont_unadj$ncontrs))
+
+spont_unadj$rate[spont_adj$p > 0.1] = NA
+spont_adj$rate[spont_adj$p > 0.1] = NA
+
+spont_unadj = filter(spont_unadj, !is.na(rate))
+spont_adj = filter(spont_adj, !is.na(rate))
+
+na_legend = "p>0.1"
+
+pdf("plots/FINAL_spont_unadj_PTD_p010.pdf",width=9.5, height=8)
+fun_plot_final(geo_dir, as.data.frame(spont_unadj), "rate", ownPalette, na_legend)
+dev.off()
+
+pdf("plots/FINAL_spont_adj_PTD_p010.pdf",width=9.5, height=8)
+fun_plot_final(geo_dir, as.data.frame(spont_adj), "rate", ownPalette, na_legend)
 dev.off()
 
 
