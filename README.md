@@ -1,8 +1,7 @@
 # SE_MFR_GEODATA
-aka "postal codes" 
 =======
 
-Project done by Sarah Murray in collaboration with Bo Jacobsson's group, on the summer of 2016.
+Project done by Sarah Murray in collaboration with Bo Jacobsson's group, on the summer of 2016. aka "postal codes".
 
 Scripts here provide the entire pipeline for data cleaning, analysis, and map generation, as used in the SMFM Pregnancy Meeting in January 2017 and submitted to AJOG in March 2017.
 
