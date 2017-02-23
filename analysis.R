@@ -37,69 +37,64 @@ m$HYPERTON = !is.na(m$HYPERTON)
 spont = filter(m, FLSPONT==1, is.na(FLINDUKT))
 spont = filter(spont, ELEKAKUT==2 | is.na(ELEKAKUT) & is.na(SECFORE))
 
-### RUN A REGRESSION TO GET ADJUSTED GA
-linearregspont = lm(GRDBS ~ age_cat + MLANGD + ROK1 + PARITET + nonswed_mother + 
-                      edu_cat + KON + AR+ DIABETES + HYPERTON + GRMETOD, na.action=na.exclude, data = spont)
-sink("tmp/regression_summary.txt")
-summary(linearregspont)
-sink(NULL)
-
-sink("tmp/demographics_spont.txt")
-summary(spont[, c("age_cat", "MLANGD", "ROK1", "PARITET", "nonswed_mother", 
-                          "edu_cat", "KON", "AR", "DIABETES", "HYPERTON", "GRMETOD")])
-sink(NULL)
-
-spont$GA_adj = mean(spont$GRDBS) + residuals(linearregspont)
-spont$PTD_adj = spont$GA_adj<259
+iatr = anti_join(m, spont, by="lpnr_BARN")
 
 
-### SUMMARIZE AND PLOT
+
+### ADJUST AND PLOT SPONT; IATR; ALL
 ownPalette = rev(brewer.pal(10, "RdYlGn"))
-
-spont = mutate(spont, lan_kom = sprintf("%04d", lan_kom)) %>%
-        group_by(lan_kom)
-spont_unadj = summarize(spont, ncases = sum(PTD), ncontrs = sum(!PTD), rate = sum(PTD)/n())
-spont_adj = filter(spont, !is.na(PTD_adj)) %>%
+adjustAndPlot = function(df, name){
+    ### RUN A REGRESSION TO GET ADJUSTED GA
+    linearreg = lm(GRDBS ~ age_cat + MLANGD + ROK1 + PARITET + nonswed_mother + 
+                            edu_cat + KON + AR+ DIABETES + HYPERTON + GRMETOD, na.action=na.exclude, data = df)
+    sink(paste("tmp/regression_summary_", name, ".txt", sep=""))
+    summary(linearreg)
+    sink(NULL)
+    
+    sink(paste("tmp/demographics_", name, ".txt", sep=""))
+    summary(df[, c("age_cat", "MLANGD", "ROK1", "PARITET", "nonswed_mother", 
+                      "edu_cat", "KON", "AR", "DIABETES", "HYPERTON", "GRMETOD")])
+    sink(NULL)
+    
+    df$GA_adj = mean(df$GRDBS) + residuals(linearreg)
+    df$PTD_adj = df$GA_adj<259
+    
+    ### SUMMARIZE PER KOMMUN
+    df_sum = mutate(df, lan_kom = sprintf("%04d", lan_kom)) %>%
+        group_by(lan_kom) %>%
+        filter(!is.na(PTD_adj)) %>%
         summarize(ncases = sum(PTD_adj), ncontrs = sum(!PTD_adj), rate = sum(PTD_adj)/n())
+    
+    ## these don't exist in the map anyway
+    df_sum$rate[df_sum$ncases == 0] = NA    
+    df_sum = filter(df_sum, !is.na(rate))
+    
+    ### PLOT
+    na_legend = NA
+    pdf(paste("plots/FINAL_", name, "_adj_PTD.pdf", sep=""), width=9.5, height=8)
+    fun_plot_final(geo_dir, as.data.frame(df_sum), "rate", ownPalette, na_legend)
+    dev.off()
+    
+    ## REGIONS WHICH (SORT OF) RELIABLY DIFFER FROM THE MEAN PTD RATE
+    df_sum$p = unlist(Map(function(x, n) binom.test(x, n, mean(df$PTD_adj, na.rm=T))$p.value,
+                          df_sum$ncases, df_sum$ncases+df_sum$ncontrs))
+    
+    df_sum$rate[df_sum$p > 0.1] = NA
+    df_sum = filter(df_sum, !is.na(rate))
+    
+    ### PLOT, w/ p filter
+    na_legend = "p>0.1"
+    pdf(paste("plots/FINAL_", name, "_adj_PTD_p010.pdf", sep=""), width=9.5, height=8)
+    fun_plot_final(geo_dir, as.data.frame(df_sum), "rate", ownPalette, na_legend)
+    dev.off()
+    
+}
 
-## these don't exist in the map anyway
-spont_unadj$rate[spont_unadj$ncases == 0] = NA
-spont_adj$rate[spont_adj$ncases == 0] = NA
+adjustAndPlot(spont, "spont")
+adjustAndPlot(iatr, "iatr")
+adjustAndPlot(m, "all")
 
-spont_unadj = filter(spont_unadj, !is.na(rate))
-spont_adj = filter(spont_adj, !is.na(rate))
 
-na_legend = NA
-
-pdf("plots/FINAL_spont_unadj_PTD.pdf",width=9.5, height=8)
-fun_plot_final(geo_dir, as.data.frame(spont_unadj), "rate", ownPalette, na_legend)
-dev.off()
-
-pdf("plots/FINAL_spont_adj_PTD.pdf",width=9.5, height=8)
-fun_plot_final(geo_dir, as.data.frame(spont_adj), "rate", ownPalette, na_legend)
-dev.off()
-
-### REGIONS WHICH (SORT OF) RELIABLY DIFFER FROM THE MEAN PTD RATE
-spont_adj$p = unlist(Map(function(x, n) binom.test(x, n, mean(spont$PTD_adj, na.rm=T))$p.value,
-                  spont_adj$ncases, spont_adj$ncases+spont_adj$ncontrs))
-spont_unadj$p = unlist(Map(function(x, n) binom.test(x, n, mean(spont$PTD, na.rm=T))$p.value,
-                         spont_unadj$ncases, spont_unadj$ncases+spont_unadj$ncontrs))
-
-spont_unadj$rate[spont_unadj$p > 0.1] = NA
-spont_adj$rate[spont_adj$p > 0.1] = NA
-
-spont_unadj = filter(spont_unadj, !is.na(rate))
-spont_adj = filter(spont_adj, !is.na(rate))
-
-na_legend = "p>0.1"
-
-pdf("plots/FINAL_spont_unadj_PTD_p010.pdf",width=9.5, height=8)
-fun_plot_final(geo_dir, as.data.frame(spont_unadj), "rate", ownPalette, na_legend)
-dev.off()
-
-pdf("plots/FINAL_spont_adj_PTD_p010.pdf",width=9.5, height=8)
-fun_plot_final(geo_dir, as.data.frame(spont_adj), "rate", ownPalette, na_legend)
-dev.off()
 
 
 ### DO CHI^2 TO CHECK WHETHER PTD DISTRIBUTION IS INDEPENDENT OF REGION
