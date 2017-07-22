@@ -5,7 +5,7 @@ getRate = function(df, st){
         data.frame(summarize(df, rate=mean(GRDBS<259, na.rm=T), n=n()), stage=st)
 }
 
-setwd("~/Documents/postal_codes/")
+setwd("~/data/swed/pcd/")
 mfr = read.table("mfr_sarah_maxi_2016june10.csv", h=T, sep=",")
 ratedf = getRate(mfr, "initial")
 
@@ -38,5 +38,5 @@ ratedf = bind_rows(ratedf, getRate(m, "mat_age"))
 m = filter(m, MLANGD>=140 & MLANGD<=210)
 ratedf = bind_rows(ratedf, getRate(m, "mat_height"))
 
-write.table(m, "tmp/mfr_edu_clean.csv", sep=";", quote=F, row.names=F, col.names=T)
-write.table(ratedf, "tmp/cleaning_loss.txt", sep="\t", quote=F, row.names=F, col.names=T)
+write.table(m, "~/Documents/postal_codes/tmp_mfr_edu_clean.csv", sep=";", quote=F, row.names=F, col.names=T)
+write.table(ratedf, "~/Documents/postal_codes/cleaning_loss.txt", sep="\t", quote=F, row.names=F, col.names=T)
