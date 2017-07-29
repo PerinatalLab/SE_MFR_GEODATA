@@ -135,22 +135,41 @@ sumspont = read.table("tmp_kommundata_spont.csv", h=T)
 sumiatr = read.table("tmp_kommundata_iatr.csv", h=T)
 sumall = read.table("tmp_kommundata_all.csv", h=T)
 
+## read in province names
+library(rgdal)
+library(ggrepel)
+dsn = readOGR(dsn="/home/julius/Documents/gitrep/SE_MFR_GEODATA/KommunRT90/", layer="Kommun_RT90_region")
+provnames = data.frame(lan_kom = dsn$KnKod, name = dsn$KnNamn)
+
 # m - global mean estimated from the full dataframe
 # v - global variance estimated from the full dataframe
-# TODO: subtract R^2 from v
 plotFunnel = function(df_sum, name, m, v){
-	df_sum = mutate(df_sum, n = ncases+ncontrs)
+	df_sum = mutate(df_sum, n = ncases+ncontrs) %>%
+		mutate(lan_kom = sprintf("%04d", lan_kom)) %>%
+		left_join(provnames, by="lan_kom")
+	print(head(df_sum))
 	nullspread = data.frame(y=1:max(sqrt(df_sum$n))) %>%
-		mutate(xmax = m + 1.96*v/y, xmin = m - 1.96*v/y)
-	p1 = ggplot(df_sum) + geom_point(aes(x=mean, y=sqrt(n)), color="turquoise3") +
+		mutate(xmax = m + 1.96*sqrt(v)/y, xmin = m - 1.96*sqrt(v)/y)
+	nullspread2 = data.frame(y=1:max(sqrt(df_sum$n))) %>%
+		mutate(xmax = m + 3.76*sqrt(v)/y, xmin = m - 3.76*sqrt(v)/y)
+	p1 = ggplot(df_sum) +
+		geom_point(aes(x=mean, y=sqrt(n)), color="turquoise3") +
 		geom_rect(aes(ymin=y, ymax=y+1, xmin=xmin, xmax=xmax), nullspread, alpha=0.2) +
+		geom_rect(aes(ymin=y, ymax=y+1, xmin=xmin, xmax=xmax), nullspread2, alpha=0.2) +
+		geom_vline(aes(xintercept=m), color="grey60") +
+		geom_label_repel(aes(x=mean, y=sqrt(n), label=name), top_n(df_sum, 5, n)) +
 		coord_cartesian(xlim = range(df_sum$mean)) +
-		theme_bw()
+		xlab("Mean gestational age") + ylab(expression(sqrt(population~size))) +
+		theme_bw() +
+		theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+	
 	ggsave(plot=p1, paste("plots/funnel_", name, ".png", sep=""))
 }
 plotFunnel(sumspont, "spont", mean(spont$GRDBS), var(spont$GRDBS)*0.98)
 plotFunnel(sumiatr, "iatr", mean(iatr$GRDBS), var(iatr$GRDBS)*0.98)
 plotFunnel(sumall, "all", mean(m$GRDBS), var(m$GRDBS)*0.98)
+qnorm(1-0.05/nrow(sumspont)/2)
+
 
 ### DO CHI^2 TO CHECK WHETHER PTD DISTRIBUTION IS INDEPENDENT OF REGION
 
