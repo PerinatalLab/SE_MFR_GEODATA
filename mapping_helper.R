@@ -50,7 +50,7 @@ fun_loadGeo = function(geo_dir, geo_data, variable_name, ownPalette) {
     return(list(dsn=dsn, colr=colr, rangeLegend=rangeLegend))
 }
 
-fun_sweden = function(globals, na_legend) {
+fun_sweden = function(globals, na_legend, ownPalette) {
     dsn = globals$dsn
     colr = globals$colr
     rangeLegend = globals$rangeLegend
@@ -447,7 +447,7 @@ fun_plot_final = function(geo_dir, geo_data, variable_name, ownPalette, na_legen
     
     # fill the windows with geographical/meta/medical data
     split.screen(m)
-    screen(1); fun_sweden(globals, na_legend)
+    screen(1); fun_sweden(globals, na_legend, ownPalette)
     screen(2); fun_stockholm(globals)
     screen(3); fun_gothenburg(globals)
     screen(4); fun_malmo(globals)

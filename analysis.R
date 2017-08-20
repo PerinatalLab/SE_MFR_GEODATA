@@ -33,94 +33,151 @@ m$PARITET = factor(m$PARITET)
 m$DIABETES = !is.na(m$DIABETES)
 m$HYPERTON = !is.na(m$HYPERTON)
 
+m = filter(m, !is.na(lan_kom))
+m$flan_kom = factor(m$lan_kom)
+m$flan_kom = relevel(m$flan_kom, ref="180")
 
-### KEEP ONLY SPONTANEOUS
+
+### SPLIT OFF SPONTANEOUS / IATR
 spont = filter(m, FLSPONT==1, is.na(FLINDUKT))
 spont = filter(spont, ELEKAKUT==2 | is.na(ELEKAKUT) & is.na(SECFORE))
-
 iatr = anti_join(m, spont, by="lpnr_BARN")
 
 
-
-### ADJUST AND PLOT SPONT; IATR; ALL
-ownPalette = rev(brewer.pal(10, "RdYlGn"))
-adjustAndPlot = function(df, name, useFE = FALSE){
-    ### RUN A REGRESSION TO GET ADJUSTED GA
+### RUN A REGRESSION TO GET ADJUSTED GA OR PROVINCE EFFECTS
+fitRegression = function(df, name, useFE = FALSE){
 	if(useFE){
 		name = paste("KommunFE", name, sep="_")
-		
-		# create a factor using largest kommun as reference:
-		df = filter(df, !is.na(lan_kom))
-		df$flan_kom = factor(df$lan_kom)
-		df$flan_kom = relevel(df$flan_kom, ref="180")
 		linearreg = lm(GRDBS ~ age_cat + MLANGD + ROK1 + PARITET + nonswed_mother + 
-					   	edu_cat + KON + AR+ DIABETES + HYPERTON + GRMETOD + flan_kom,
-					   na.action = na.exclude, data = df)
+					   	edu_cat + KON + AR + DIABETES + HYPERTON + GRMETOD + flan_kom,
+					   na.action = na.exclude, data = df, model=F)
 	} else {
 		# do not include lan_kom in the model
 		linearreg = lm(GRDBS ~ age_cat + MLANGD + ROK1 + PARITET + nonswed_mother + 
-					   	edu_cat + KON + AR+ DIABETES + HYPERTON + GRMETOD,
-					   na.action=na.exclude, data = df)
+					   	edu_cat + KON + AR + DIABETES + HYPERTON + GRMETOD,
+					   na.action = na.exclude, data = df, model=F)
 	}
+	save(linearreg, file=paste0("model_lm_", name, ".RData"))
 
     sink(paste("tmp_regression_summary_", name, ".txt", sep=""))
     print(summary(linearreg))
     sink(NULL)
     
-    sink(paste("tmp_demographics_", name, ".txt", sep=""))
-    print(summary(df[, c("age_cat", "MLANGD", "ROK1", "PARITET", "nonswed_mother", 
-                      "edu_cat", "KON", "AR", "DIABETES", "HYPERTON", "GRMETOD")]))
-    sink(NULL)
-    
-    df$GA_adj = mean(df$GRDBS) + residuals(linearreg)
-    df$PTD_adj = df$GA_adj<259
-    
-    ### SUMMARIZE PER KOMMUN
-    df_sum = mutate(df, lan_kom = sprintf("%04d", lan_kom)) %>%
-        group_by(lan_kom) %>%
-        filter(!is.na(PTD_adj)) %>%
-        summarize(ncases = sum(PTD_adj), ncontrs = sum(!PTD_adj), rate = sum(PTD_adj)/n(), mean = mean(GA_adj))
-    
-    ## these don't exist in the map anyway
-    df_sum$rate[df_sum$ncases == 0] = NA    
-    df_sum = filter(df_sum, !is.na(rate))
-    
-    ### PLOT, everything
-    na_legend = NA
-    pdf(paste("plots/FINAL_", name, "_adj_PTD.pdf", sep=""), width=9.5, height=8)
-    fun_plot_final(geo_dir, as.data.frame(df_sum), "rate", ownPalette, na_legend)
-    dev.off()
-    
-    ### PLOT, w/ p filter
-    if(!useFE){
-    	## store the summaries for funnel plots
-    	write.table(df_sum, paste("tmp_kommundata_", name, ".csv", sep=""), col.names=T, row.names=F, quote=F)
-    	
-    	## regions which kind of reliably differ from mean PTD rate:
-    	df_sum$p = unlist(Map(function(x, n) binom.test(x, n, mean(df$PTD_adj, na.rm=T))$p.value,
-    						  df_sum$ncases, df_sum$ncases+df_sum$ncontrs))
-    	
-    	df_sum$rate[df_sum$p > 0.1] = NA
-    	df_sum = filter(df_sum, !is.na(rate))
-    	
-    	na_legend = "p>0.1"
-    	pdf(paste("plots/FINAL_", name, "_adj_PTD_p010.pdf", sep=""), width=9.5, height=8)
-    	fun_plot_final(geo_dir, as.data.frame(df_sum), "rate", ownPalette, na_legend)
-    	dev.off()
-    }
-    
-    return(summary(linearreg))
+    return(linearreg)
 }
 
-modspont = adjustAndPlot(spont, "spont", FALSE)
-modiatr = adjustAndPlot(iatr, "iatr", FALSE)
-modall = adjustAndPlot(m, "all", FALSE)
+### SUMMARIZE PER KOMMUN
+summarizeKommun = function(df, lmObject, name, useFE = FALSE){
+	if(useFE){
+		# prediction "after removing risk factors":
+		# all cont variables at mean, factors at reference
+		refind = data.frame(age_cat=factor(2), MLANGD=mean(df$MLANGD), ROK1=factor(1), PARITET=factor(1),
+							nonswed_mother=FALSE, edu_cat=factor(1), KON=factor(1), AR=mean(df$AR),
+							DIABETES=F, HYPERTON=F, GRMETOD=factor(1), flan_kom=df$flan_kom)
+		name = paste("KommunFE", name, sep="_")
+	} else {
+		refind = data.frame(age_cat=factor(2), MLANGD=mean(df$MLANGD), ROK1=factor(1), PARITET=factor(1),
+							nonswed_mother=FALSE, edu_cat=factor(1), KON=factor(1), AR=mean(df$AR),
+							DIABETES=F, HYPERTON=F, GRMETOD=factor(1), flan_kom=factor("180"))
+	}
+	
+	# X_ref*beta [+ prov*beta_prov] + epsilons
+	# can use E(Y) + epsilons instead, gives ~0.3 d difference
+	df$GA_adj = predict(lmObject, refind) + residuals(lmObject)
+	df$PTD_adj = df$GA_adj<259
+	countryPTD = mean(df$PTD_adj, na.rm=T)
+	countryGA = mean(df$GA_adj, na.rm=T)
+	
+	# get kommun PTD rates, mean GAs, and p-values for each
+	# - PTD tested against overall rate w/ binom.test
+	# - GA tested against overall mean w/ t.test
+	# - overall data taken after "adjustment for risk factors"
+	df_sum = mutate(df, lan_kom = sprintf("%04d", lan_kom)) %>%
+		group_by(lan_kom) %>%
+		filter(!is.na(PTD_adj), sum(!is.na(GA_adj))>1)
+	df_sum = df_sum %>%
+		summarize(ncases = sum(PTD_adj), ncontrs = sum(!PTD_adj),
+				  rate = sum(PTD_adj)/n(), mean = mean(GA_adj),
+				  PTD_p = binom.test(ncases, n(), p=countryPTD, alternative="two")$p.value,
+				  GA_p = t.test(GA_adj, mu=countryGA, alternative="two")$p.value
+		)
+	
+	## these don't exist in the map anyway
+	df_sum$rate[df_sum$ncases == 0] = NA
+	df_sum = filter(df_sum, !is.na(rate))
+	
+	# store it
+	write.table(df_sum, paste("sum_kommundata_", name, ".csv", sep=""), col.names=T, row.names=F, quote=F)
+	
+	# store some demographics
+	sink(paste("tmp_demographics_", name, ".txt", sep=""))
+	print(summary(df[, c("age_cat", "MLANGD", "ROK1", "PARITET", "nonswed_mother", 
+						 "edu_cat", "KON", "AR", "DIABETES", "HYPERTON", "GRMETOD")]))
+	sink(NULL)
+
+	return(df_sum)
+}
+
+### PLOT, anything
+makeMaps = function(kommunSum, name){
+	# make complete maps without caring about significance
+	na_legend = NA
+	
+	ownPalette = brewer.pal(10, "RdYlGn")
+	pdf(paste("plots/FINAL_", name, "_adj_GA.pdf", sep=""), width=9.5, height=8)
+	fun_plot_final(geo_dir, as.data.frame(kommunSum), "mean", ownPalette, na_legend)
+	dev.off()
+	
+	ownPalette = rev(brewer.pal(10, "RdYlGn"))
+	pdf(paste("plots/FINAL_", name, "_adj_PTD.pdf", sep=""), width=9.5, height=8)
+	fun_plot_final(geo_dir, as.data.frame(kommunSum), "rate", ownPalette, na_legend)
+	dev.off()
+	
+	# now color only regions which kind of reliably differ from mean PTD rate
+	# significance cutoff:
+	kommunSumPlot = filter(kommunSum, !is.na(rate), GA_p<0.1)
+	na_legend = "p>0.1"
+	
+	ownPalette = brewer.pal(10, "RdYlGn")
+	pdf(paste("plots/FINAL_", name, "_adj_GA_p010.pdf", sep=""), width=9.5, height=8)
+	fun_plot_final(geo_dir, as.data.frame(kommunSumPlot), "mean", ownPalette, na_legend)
+	dev.off()
+	
+	kommunSumPlot = filter(kommunSum, !is.na(rate), PTD_p<0.1)
+	na_legend = "p>0.1"
+	
+	ownPalette = rev(brewer.pal(10, "RdYlGn"))
+	pdf(paste("plots/FINAL_", name, "_adj_PTD_p010.pdf", sep=""), width=9.5, height=8)
+	fun_plot_final(geo_dir, as.data.frame(kommunSumPlot), "rate", ownPalette, na_legend)
+	dev.off()
+}
+
+### ADJUST AND PLOT SPONT; IATR; ALL
+modspont = fitRegression(spont, "spont", FALSE)
+sumspont = summarizeKommun(spont, modspont, "spont", FALSE)
+makeMaps(sumspont, "spont")
+
+modiatr = fitRegression(iatr, "iatr", FALSE)
+sumiatr = summarizeKommun(iatr, modiatr, "iatr", FALSE)
+makeMaps(sumiatr, "iatr")
+
+modall = fitRegression(m, "all", FALSE)
+sumall = summarizeKommun(m, modall, "all", FALSE)
+makeMaps(sumall, "all")
 
 
 ### FIT KOMMUN-LEVEL FIXED EFFECTS & DECOMPOSE VARIANCE
-modspontfe = adjustAndPlot(spont, "spont", TRUE)
-modiatrfe = adjustAndPlot(iatr, "iatr", TRUE)
-modallfe = adjustAndPlot(m, "all", TRUE)
+modspont = fitRegression(spont, "spont", TRUE)
+sumspont = summarizeKommun(spont, modspont, "spont", TRUE)
+makeMaps(sumspont, "spont")
+
+modiatr = fitRegression(iatr, "iatr", TRUE)
+sumiatr = summarizeKommun(iatr, modiatr, "iatr", TRUE)
+makeMaps(sumiatr, "iatr")
+
+modall = fitRegression(m, "all", TRUE)
+sumall = summarizeKommun(m, modall, "all", TRUE)
+makeMaps(sumall, "all")
 
 # variance attributed to the added lan_kom factor:
 modspont$r.squared; modspontfe$r.squared; modspontfe$r.squared - modspont$r.squared
@@ -131,9 +188,9 @@ anova(linearreg, linearreg2) # F ca. 11, p below any precision
 
 
 ### MAKE FUNNELS
-sumspont = read.table("tmp_kommundata_spont.csv", h=T)
-sumiatr = read.table("tmp_kommundata_iatr.csv", h=T)
-sumall = read.table("tmp_kommundata_all.csv", h=T)
+sumspont = read.table("sum_kommundata_spont.csv", h=T)
+sumiatr = read.table("sum_kommundata_iatr.csv", h=T)
+sumall = read.table("sum_kommundata_all.csv", h=T)
 
 ## read in province names
 library(rgdal)
@@ -170,16 +227,3 @@ plotFunnel(sumiatr, "iatr", mean(iatr$GRDBS), var(iatr$GRDBS)*0.98)
 plotFunnel(sumall, "all", mean(m$GRDBS), var(m$GRDBS)*0.98)
 qnorm(1-0.05/nrow(sumspont)/2)
 
-
-### DO CHI^2 TO CHECK WHETHER PTD DISTRIBUTION IS INDEPENDENT OF REGION
-
-test_got = filter(spont_adj, grepl("^01", lan_kom))
-test_sto = filter(spont_adj, grepl("^12", lan_kom))
-test_ska = filter(spont_adj, grepl("^14", lan_kom))
-
-chisq.test(matrix(c(test_got$ncases, test_got$ncontrs), ncol=2))
-chisq.test(matrix(c(test_sto$ncases, test_sto$ncontrs), ncol=2))
-chisq.test(matrix(c(test_ska$ncases, test_ska$ncontrs), ncol=2))
-
-test_tmp = filter(spont_adj, ncases>5)
-chisq.test(matrix(c(test_tmp$ncases, test_tmp$ncontrs), ncol=2))
