@@ -68,6 +68,11 @@ fitRegression = function(df, name, useFE = FALSE){
 
 ### SUMMARIZE PER KOMMUN
 summarizeKommun = function(df, lmObject, name, useFE = FALSE){
+	# must remove the ones that were omitted in regression
+	df$flan_kom[is.na(df$age_cat) | is.na(df$MLANGD) | is.na(df$ROK1) | is.na(df$PARITET) |
+				is.na(df$nonswed_mother) | is.na(df$edu_cat) | is.na(df$KON) | is.na(df$AR) |
+				is.na(df$DIABETES) | is.na(df$HYPERTON) | is.na(df$GRMETOD)] = NA
+	
 	if(useFE){
 		# prediction "after removing risk factors":
 		# all cont variables at mean, factors at reference
@@ -169,7 +174,7 @@ makeMaps(sumall, "all")
 ### FIT KOMMUN-LEVEL FIXED EFFECTS & DECOMPOSE VARIANCE
 modspont = fitRegression(spont, "spont", TRUE)
 sumspont = summarizeKommun(spont, modspont, "spont", TRUE)
-makeMaps(sumspont, "spont")
+makeMaps(sumspont, "spont_KommunFE")
 
 modiatr = fitRegression(iatr, "iatr", TRUE)
 sumiatr = summarizeKommun(iatr, modiatr, "iatr", TRUE)
