@@ -125,6 +125,9 @@ summarizeKommun = function(df, lmObject, name, useFE = FALSE){
 
 ### PLOT, anything
 makeMaps = function(kommunSum, name){
+	# pad lan_kom with zeroes
+	kommunSum$lan_kom = sprintf("%04d", kommunSum$lan_kom)
+
 	# make complete maps without caring about significance
 	na_legend = NA
 	
