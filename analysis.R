@@ -178,18 +178,18 @@ makeMaps(sumspont, "spont_KommunFE")
 
 modiatr = fitRegression(iatr, "iatr", TRUE)
 sumiatr = summarizeKommun(iatr, modiatr, "iatr", TRUE)
-makeMaps(sumiatr, "iatr")
+makeMaps(sumiatr, "iatr_KommunFE")
 
 modall = fitRegression(m, "all", TRUE)
 sumall = summarizeKommun(m, modall, "all", TRUE)
-makeMaps(sumall, "all")
+makeMaps(sumall, "all_KommunFE")
 
 # variance attributed to the added lan_kom factor:
 modspont$r.squared; modspontfe$r.squared; modspontfe$r.squared - modspont$r.squared
 modiatr$r.squared; modiatrfe$r.squared; modiatrfe$r.squared - modiatr$r.squared
 modall$r.squared; modallfe$r.squared; modallfe$r.squared - modall$r.squared
 
-anova(linearreg, linearreg2) # F ca. 11, p below any precision
+anova(linearreg, linearreg2) # F ca11, p below any precision
 
 
 ### MAKE FUNNELS
