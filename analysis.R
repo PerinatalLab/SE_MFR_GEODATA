@@ -143,16 +143,18 @@ makeMaps = function(kommunSum, name){
 	
 	# now color only regions which kind of reliably differ from mean PTD rate
 	# significance cutoff:
-	kommunSumPlot = filter(kommunSum, !is.na(rate), GA_p<0.1)
-	na_legend = "p>0.1"
+	kommunSum$GA_q = p.adjust(kommunSum$GA_p, method="fdr")
+	kommunSumPlot = filter(kommunSum, !is.na(rate), GA_q<0.1)
+	na_legend = "FDR > 10%"
 	
 	ownPalette = brewer.pal(10, "RdYlGn")
 	pdf(paste("plots/FINAL_", name, "_adj_GA_p010.pdf", sep=""), width=9.5, height=8)
 	fun_plot_final(geo_dir, as.data.frame(kommunSumPlot), "mean", ownPalette, na_legend)
 	dev.off()
 	
-	kommunSumPlot = filter(kommunSum, !is.na(rate), PTD_p<0.1)
-	na_legend = "p>0.1"
+	kommunSum$PTD_q = p.adjust(kommunSum$PTD_p, method="fdr")
+	kommunSumPlot = filter(kommunSum, !is.na(rate), PTD_q<0.1)
+	na_legend = "FDR > 10%"
 	
 	ownPalette = rev(brewer.pal(10, "RdYlGn"))
 	pdf(paste("plots/FINAL_", name, "_adj_PTD_p010.pdf", sep=""), width=9.5, height=8)
