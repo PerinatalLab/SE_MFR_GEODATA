@@ -196,9 +196,9 @@ anova(linearreg, linearreg2) # F ca11, p below any precision
 
 
 ### MAKE FUNNELS
-sumspont = read.table("sum_kommundata_spont.csv", h=T)
-sumiatr = read.table("sum_kommundata_iatr.csv", h=T)
-sumall = read.table("sum_kommundata_all.csv", h=T)
+sumspont = read.table("sum_kommundata_KommunFE_spont.csv", h=T)
+sumiatr = read.table("sum_kommundata_KommunFE_iatr.csv", h=T)
+sumall = read.table("sum_kommundata_KommunFE_all.csv", h=T)
 
 ## read in province names
 library(rgdal)
@@ -206,32 +206,41 @@ library(ggrepel)
 dsn = readOGR(dsn="/home/julius/Documents/gitrep/SE_MFR_GEODATA/KommunRT90/", layer="Kommun_RT90_region")
 provnames = data.frame(lan_kom = dsn$KnKod, name = dsn$KnNamn)
 
-# m - global mean estimated from the full dataframe
 # v - global variance estimated from the full dataframe
-plotFunnel = function(df_sum, name, m, v){
+# (- would be more precise to calculate from the regression object)
+plotFunnel = function(df_sum, name, v, label){
 	df_sum = mutate(df_sum, n = ncases+ncontrs) %>%
 		mutate(lan_kom = sprintf("%04d", lan_kom)) %>%
 		left_join(provnames, by="lan_kom")
-	print(head(df_sum))
+	mu = weighted.mean(df_sum$mean, df_sum$n)
+	
+	# get nominal and Bonferroni-adjusted SE thresholds
+	level1 = qnorm(0.025, lower.tail = F)
+	level2 = qnorm(0.025/nrow(df_sum), lower.tail = F)
 	nullspread = data.frame(y=1:max(sqrt(df_sum$n))) %>%
-		mutate(xmax = m + 1.96*sqrt(v)/y, xmin = m - 1.96*sqrt(v)/y)
+		mutate(xmax = mu + level1*sqrt(v)/y, xmin = mu - level1*sqrt(v)/y)
 	nullspread2 = data.frame(y=1:max(sqrt(df_sum$n))) %>%
-		mutate(xmax = m + 3.76*sqrt(v)/y, xmin = m - 3.76*sqrt(v)/y)
+		mutate(xmax = mu + level2*sqrt(v)/y, xmin = mu - level2*sqrt(v)/y)
 	p1 = ggplot(df_sum) +
 		geom_point(aes(x=mean, y=sqrt(n)), color="turquoise3") +
 		geom_rect(aes(ymin=y, ymax=y+1, xmin=xmin, xmax=xmax), nullspread, alpha=0.2) +
 		geom_rect(aes(ymin=y, ymax=y+1, xmin=xmin, xmax=xmax), nullspread2, alpha=0.2) +
-		geom_vline(aes(xintercept=m), color="grey60") +
-		geom_label_repel(aes(x=mean, y=sqrt(n), label=name), top_n(df_sum, 5, n)) +
+		geom_vline(aes(xintercept=mu), color="grey60") +
 		coord_cartesian(xlim = range(df_sum$mean)) +
 		xlab("Mean gestational age") + ylab(expression(sqrt(population~size))) +
 		theme_bw() +
 		theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 	
-	ggsave(plot=p1, paste("plots/funnel_", name, ".png", sep=""))
+	# add labels for the top 5 provinces
+	if(label){
+		p1 = p1 + geom_label_repel(aes(x=mean, y=sqrt(n), label=name), top_n(df_sum, 5, n))
+	} else {
+		name = paste(name, "nolab", sep="_")
+	}
+	
+	ggsave(plot=p1, paste("plots/funnel_", name, ".png", sep=""), width=8, height=6, units="in")
 }
-plotFunnel(sumspont, "spont", mean(spont$GRDBS), var(spont$GRDBS)*0.98)
-plotFunnel(sumiatr, "iatr", mean(iatr$GRDBS), var(iatr$GRDBS)*0.98)
-plotFunnel(sumall, "all", mean(m$GRDBS), var(m$GRDBS)*0.98)
-qnorm(1-0.05/nrow(sumspont)/2)
+plotFunnel(sumspont, "spont_KommunFE", var(spont$GRDBS)*0.984, FALSE)
+plotFunnel(sumiatr, "iatr_KommunFE", var(iatr$GRDBS)*0.971, FALSE)
+plotFunnel(sumall, "all_KommunFE", var(m$GRDBS)*0.983, FALSE)
 
