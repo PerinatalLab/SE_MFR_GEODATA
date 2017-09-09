@@ -197,6 +197,7 @@ fun_stockholm = function(globals) {
     
     # plot geography with values for each area
     geo <- dsn[which(substr(dsn$KnKod,1,2) == "01"),]
+    colr <- colr[which(substr(dsn$KnKod,1,2) == "01")]
     plot(geo,xlim=geo@bbox[1,],ylim=geo@bbox[2,],lwd=0.3,col=colr)
     
     ### extract all centers of all municipalities
@@ -270,6 +271,7 @@ fun_gothenburg = function(globals) {
     par(oma=c(0,0,0,0))
     
     geo <- dsn[which(substr(dsn$KnKod,1,2) == "14"),]
+    colr <- colr[which(substr(dsn$KnKod,1,2) == "14")]
     plot(geo,xlim=geo@bbox[1,],ylim=geo@bbox[2,],col=colr,lwd=0.3)
     
     ### extract all centers of all municipalities
@@ -375,6 +377,7 @@ fun_malmo = function(globals) {
     #par(oma=c(0,0,0,0))
     
     geo <- dsn[which(substr(dsn$KnKod,1,2) == "12"),]
+    colr <- colr[which(substr(dsn$KnKod,1,2) == "12")]
     plot(geo,xlim=geo@bbox[1,],ylim=geo@bbox[2,],col=colr,lwd=0.3)
     
     ### extract all centers of all municipalities
