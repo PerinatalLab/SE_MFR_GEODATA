@@ -50,10 +50,82 @@ fun_loadGeo = function(geo_dir, geo_data, variable_name, ownPalette) {
     return(list(dsn=dsn, colr=colr, rangeLegend=rangeLegend))
 }
 
+correct_coords = function(dsn){
+	### extract all centers of all municipalities
+	ccord = data.frame(seq=seq_along(dsn$KnKod), code=dsn$KnKod, name=dsn$KnNamn,
+					   x=0, y=0, area=0)
+	
+	Encoding(ccord$name) = "UTF-8"
+	
+	for (i in 1:length(dsn$KnKod)) {
+		t = dsn@polygons[[i]]@Polygons[[1]]@labpt # get center coords
+		ccord$x[i] = t[1]
+		ccord$y[i] = t[2]
+		ccord$area[i] = dsn@polygons[[i]]@Polygons[[1]]@area
+		rm(t)
+	}
+
+	### correct center positions for some troublesome areas
+	# SWEDEN
+	ccord$y[which(ccord$code=="2506")] = 7380000 # Arjeplog
+	ccord$y[which(ccord$code=="2421")] = 7277000 # Storuman
+	ccord$x[which(ccord$code=="2421")] = 1480000 # Storuman
+	ccord$y[which(ccord$code=="2482")] = 7230000 # SkellefteÃ¥
+	ccord$y[which(ccord$code=="2313")] = 7100000 # StrÃ¶msund
+	ccord$x[which(ccord$code=="2313")] = 1500000 # StrÃ¶msund
+	ccord$y[which(ccord$code=="2161")] = 6850000 # Ljusdal
+	ccord$y[which(ccord$code=="2326")] = 6970000 # Berg
+	ccord$x[which(ccord$code=="0885")] = 1580000 # Borgholm
+	ccord$y[which(ccord$code=="2580")] = 7300000 # LuleÃ¥
+	ccord$y[which(ccord$code=="2380")] = 7030000 # Ãstersund
+	ccord$x[which(ccord$code=="2380")] = 1460000 # Ãstersund
+	ccord$x[which(ccord$code=="0481")] = 1580000 # OxelÃ¶sund
+	
+	ccord$y[which(ccord$code=="0481")] = 6500000 # OxelÃ¶sund
+	ccord$y[which(ccord$code=="0880")] = 6275000 # Kalmar
+	ccord$x[which(ccord$code=="0880")] = 1515000 # Kalmar
+	ccord$y[which(ccord$code=="0319")] = 6735000 # Ãlvkarleby
+	ccord$x[which(ccord$code=="0319")] = 1598000 # Ãlvkarleby
+	
+	# GOTHENBURG
+	ccord$x[which(ccord$code=="1083")] = 1440000 # SÃ¶lvesborg
+	ccord$y[which(ccord$code=="1083")] = 6205000 # SÃ¶lvesborg
+	ccord$x[which(ccord$code=="0488")] = 1605000 # Trosa
+	ccord$y[which(ccord$code=="0488")] = 6519000 # Trosa
+	ccord$x[which(ccord$code=="0582")] = 1525000 # SÃ¶derkÃ¶ping
+	ccord$y[which(ccord$code=="0582")] = 6480000 # SÃ¶derkÃ¶ping
+	ccord$y[which(ccord$code=="1761")] = 6567000 # HammarÃ¶
+	
+	# GOTHENBURG
+	ccord$x[which(ccord$code=="1487")] = 1290000 # VÃ¤nersborg
+	ccord$x[which(ccord$code=="1485")] = 1275000 # Uddevalla
+	ccord$y[which(ccord$code=="1485")] = 6468000 # Uddevalla
+	ccord$y[which(ccord$code=="1493")] = 6505000 # Mariestad
+	ccord$x[which(ccord$code=="1493")] = 1380000 # Mariestad
+	ccord$y[which(ccord$code=="1489")] = 6425000 # AlingsÃ¥s
+	ccord$y[which(ccord$code=="1481")] = 6392000 # MÃ¶lndal
+	ccord$y[which(ccord$code=="1415")] = 6448000 # Stenungsund
+	ccord$y[which(ccord$code=="1438")] = 6560000 # Dals-Ed
+	ccord$y[which(ccord$code=="1401")] = 6398000 # HÃ¤rryda
+	ccord$x[which(ccord$code=="1401")] = 1299000 # HÃ¤rryda
+	ccord$y[which(ccord$code=="1465")] = 6363000 # Svenljunga
+	ccord$y[which(ccord$code=="1463")] = 6375000 # Mark
+	ccord$y[which(ccord$code=="1484")] = 6477000 # Lysekil
+	
+	# MALMO
+	ccord$x[which(ccord$code=="1273")] = 1390000 # Osby
+	ccord$x[which(ccord$code=="1231")] = 1328500 # BurlÃ¶v
+	ccord$x[which(ccord$code=="1291")] = 1401500 # Simrishamn
+	ccord$y[which(ccord$code=="1260")] = 6215000 # Bjuv
+	
+	return(ccord)
+}
+
 fun_sweden = function(globals, na_legend, ownPalette) {
     dsn = globals$dsn
     colr = globals$colr
     rangeLegend = globals$rangeLegend
+    ccord = globals$ccord
     
     # settings for plotting
     par(mai=c(0,0,0,0))
@@ -63,84 +135,25 @@ fun_sweden = function(globals, na_legend, ownPalette) {
     plot(dsn,col=colr,lwd=0.3)
     
     # some geo-areas will be plotted separately. mask them from the current plot
-    no_polt_ix = which(substr(dsn$KnKod,1,2) %in% c("01","12","14"))
-    geo <- dsn[no_polt_ix,]
+    geo <- dsn[which(substr(dsn$KnKod,1,2) %in% c("01","12","14")),]
     plot(geo,xlim=geo@bbox[1,],ylim=geo@bbox[2,],
          add=T,lwd=1e-5,lty=0,col="mistyrose4")
     
     #########  ADD MAP NAMES/INDEXES AND LEGEND WITH NAMES OF THE AREAS
-    
-    ### extract all centers of all municipalities
-    ccord = NULL # center coordinates and area
-    for (i in 1:length(dsn$KnKod)) {
-      t = dsn@polygons[[i]]@Polygons[[1]]@labpt # get center coords
-      s = dsn@polygons[[i]]@Polygons[[1]]@area
-      u = data.frame(seq=i,code=dsn$KnKod[i],name=dsn$KnNamn[i],
-                     x=t[1],y=t[2],area=s,stringsAsFactors=F)
-      ccord = rbind(ccord,u)
-      rm(t,u,s)
-    }
-    
     # types of municipalities
-    cond1 = substr(ccord$code,1,2) %in% c("01","12","14") # MAIN (Gbg,Stock,Malm)
-    cond2 = ccord$area > 5e9 # LARGE
-    
-    
-    # CORRECTING centers for problematic regions
-    ccord$y[which(ccord$code=="2506")] = 7380000 # Arjeplog
-    ccord$y[which(ccord$code=="2421")] = 7277000 # Storuman
-    ccord$x[which(ccord$code=="2421")] = 1480000 # Storuman
-    ccord$y[which(ccord$code=="2482")] = 7230000 # SkellefteÃ¥
-    ccord$y[which(ccord$code=="2313")] = 7100000 # StrÃ¶msund
-    ccord$x[which(ccord$code=="2313")] = 1500000 # StrÃ¶msund
-    ccord$y[which(ccord$code=="2161")] = 6850000 # Ljusdal
-    ccord$y[which(ccord$code=="2326")] = 6970000 # Berg
-    ccord$x[which(ccord$code=="0885")] = 1580000 # Borgholm
-    ccord$y[which(ccord$code=="2580")] = 7300000 # LuleÃ¥
-    ccord$y[which(ccord$code=="2380")] = 7030000 # Ãstersund
-    ccord$x[which(ccord$code=="2380")] = 1460000 # Ãstersund
-    ccord$x[which(ccord$code=="0481")] = 1580000 # OxelÃ¶sund
-    
-    ccord$y[which(ccord$code=="0481")] = 6500000 # OxelÃ¶sund
-    ccord$y[which(ccord$code=="0880")] = 6275000 # Kalmar
-    ccord$x[which(ccord$code=="0880")] = 1515000 # Kalmar
-    ccord$y[which(ccord$code=="0319")] = 6735000 # Ãlvkarleby
-    ccord$x[which(ccord$code=="0319")] = 1598000 # Ãlvkarleby
-    
-    ccord$x[which(ccord$code=="1083")] = 1440000 # SÃ¶lvesborg
-    ccord$y[which(ccord$code=="1083")] = 6205000 # SÃ¶lvesborg
-    ccord$x[which(ccord$code=="0488")] = 1605000 # Trosa
-    ccord$y[which(ccord$code=="0488")] = 6519000 # Trosa
-    ccord$x[which(ccord$code=="0582")] = 1525000 # SÃ¶derkÃ¶ping
-    ccord$y[which(ccord$code=="0582")] = 6480000 # SÃ¶derkÃ¶ping
-    ccord$y[which(ccord$code=="1761")] = 6567000 # HammarÃ¶
-    #text(ccord$x,ccord$y,ccord$code,cex=0.3)
-    Encoding(ccord$name) = "UTF-8"
-    
-    
-    ### assign the areas with abbrev.number based on their size
-    indx = which(!cond1 & !cond2)
-    sub1 = ccord[indx,] # will have indexes on the map
-    sub2 = ccord[-indx,] # will be plotted separately or will have names on the map
-    
-    sub1 = sub1[order(sub1$area),]
-    sub1$abbrev = seq(nrow(sub1))
-    sub2 = sub2[order(sub2$area),] # not necessary
-    sub2$abbrev = seq(nrow(sub2)) + nrow(sub1)  # not necessary
-    
-    # rewrite original object
-    ccord = rbind(sub1,sub2)
-    ccord = ccord[order(ccord$seq),]
-    
+    ccord$main = substr(ccord$code,1,2) %in% c("01","12","14") # MAIN (Gbg,Stock,Malm)
+    ccord$large = ccord$area > 5e9 # LARGE
+
     # which non-major municipalities are large enough to get their names ON the map
-    indx = which(!cond1 & cond2)
-    text(ccord[indx,"x"],ccord[indx,"y"],ccord[indx,"name"],cex=0.3)
+    indx = which(!ccord$main & ccord$large)
+    text(ccord[indx,"x"],ccord[indx,"y"],ccord[indx,"name"], cex=0.3)
     
     # which non-major municipalities are small enough to get their names in the legend
-    indx = which(!cond1 & !cond2)
-    text(ccord[indx,"x"],ccord[indx,"y"],ccord[indx,"abbrev"],cex=0.27)
+    # (assign the areas with abbrev.number based on their size)
+    sub = ccord[which(!ccord$main & !ccord$large),]
+    sub$abbrev = rank(sub$area, ties.method = "first")
+    text(sub$x, sub$y, sub$abbrev, cex=0.27)
     
-    sub = ccord[which(!cond1 & !cond2),]
     sub = sub[order(sub$abbrev),]
     clmn_fract = 0.6 # fraction of areas in the 1st column of the legend
     sub1 = sub[1:floor(nrow(sub)*clmn_fract),]
@@ -151,19 +164,17 @@ fun_sweden = function(globals, na_legend, ownPalette) {
     y_max = dsn@bbox[2,2] + (dsn@bbox[2,2]-dsn@bbox[2,1])*0.0  # top text position
     y_min = dsn@bbox[2,1] - (dsn@bbox[2,2]-dsn@bbox[2,1])*0.0  # bottom text position
     
-    
     # first column of the legend
-    sub1$y_new = seq(from=y_max,to=y_min,length.out=nrow(sub1))
+    sub1$y_new = seq(from=y_max, to=y_min, length.out=nrow(sub1))
     text(rep(x_min,nrow(sub1)),sub1$y_new,cex=0.4,pos=2,
          labels = paste(sub1$name,sub1$abbrev,sep=" "),col="white",font=2)
     text(rep(x_min,nrow(sub1)),sub1$y_new,cex=0.4,pos=2,
          labels = paste(sub1$name,sub1$abbrev,sep=" "))
     
     # second column of the legend
-    tmp = seq(from=y_max,to=y_min,by=sub1$y_new[2]-sub1$y_new[1])
-    sub2$y_new = tmp[1:nrow(sub2)]
-    text(rep(x_max,nrow(sub2)),sub2$y_new,cex=0.4,pos=2,
-         labels = paste(sub2$name,sub2$abbrev,sep=" "))
+    sub2$y_new = sub1$y_new[1:nrow(sub2)]
+    text(rep(x_max,nrow(sub2)), sub2$y_new, cex=0.4, pos=2,
+         labels = paste(sub2$name, sub2$abbrev))
     
     ## draw the legend (values for each color)
     x = dsn@bbox[1,2] - (dsn@bbox[1,2]-dsn@bbox[1,1])*0.15
@@ -190,6 +201,7 @@ fun_stockholm = function(globals) {
     dsn = globals$dsn
     colr = globals$colr
     rangeLegend = globals$rangeLegend
+    ccord = globals$ccord
 
     # settings for plotting
     par(mai=c(0,0,0,0))
@@ -198,30 +210,18 @@ fun_stockholm = function(globals) {
     # plot geography with values for each area
     geo <- dsn[which(substr(dsn$KnKod,1,2) == "01"),]
     colr <- colr[which(substr(dsn$KnKod,1,2) == "01")]
+    ccord <- ccord[which(substr(ccord$code,1,2) == "01"),]
     plot(geo,xlim=geo@bbox[1,],ylim=geo@bbox[2,],lwd=0.3,col=colr)
-    
-    ### extract all centers of all municipalities
-    ccord = NULL # center coordinates and area
-    for (i in 1:length(geo$KnKod)) {
-      t = geo@polygons[[i]]@Polygons[[1]]@labpt # get center coords
-      s = geo@polygons[[i]]@Polygons[[1]]@area
-      u = data.frame(seq=i,code=geo$KnKod[i],name=geo$KnNamn[i],
-                     x=t[1],y=t[2],area=s,stringsAsFactors=F)
-      ccord = rbind(ccord,u)
-      rm(t,u,s)
-    }
-    #text(ccord$x,ccord$y,ccord$code,cex=0.7)
-    Encoding(ccord$name) = "UTF-8"
     
     # areas that will be plotted next to the map but not in the legend
     codes_right = c("0188","0117","0187","0186","0120","0138","0136","0192")
-    codes_left = c("0125","0128","0140","0181") # "0191","0139"
+    codes_left = c("0125","0128","0140","0181")
     
     left = ccord[which(ccord$code %in% codes_left),]
     righ = ccord[which(ccord$code %in% codes_right),]
+    
     cntr = ccord[which( ! ccord$code %in% c(codes_left,codes_right)),]
-    cntr = cntr[order(cntr$area),]
-    cntr$abbrev = seq(nrow(cntr))
+    cntr$abbrev = rank(cntr$area, ties.method = "first")
     text(cntr$x,cntr$y,cntr$abbrev,cex=0.3)
     
     x_min = geo@bbox[1,1] - (geo@bbox[1,2]-geo@bbox[1,1])*0.02 # text position left
@@ -231,7 +231,6 @@ fun_stockholm = function(globals) {
     
     for (i in 1:nrow(left)) {
       t = left[i,]
-      #segments(x0=x_min,x1=t$x,y0=t$y_new,y1=t$y,lwd=0.2)
       segments(x0=x_min-2000,x1=t$x,y0=t$y,y1=t$y,lwd=0.2)
       points(t$x,t$y,pch=19,cex=0.2,col="red")
       rm(t)
@@ -239,7 +238,6 @@ fun_stockholm = function(globals) {
     
     for (i in 1:nrow(righ)) {
       t = righ[i,]
-      #segments(x0=x_max,x1=t$x,y0=t$y_new,y1=t$y,lwd=0.2)
       segments(x0=x_max+2000,x1=t$x,y0=t$y,y1=t$y,lwd=0.2)
       points(t$x,t$y,pch=19,cex=0.2,col="red")
       rm(t)
@@ -265,54 +263,23 @@ fun_gothenburg = function(globals) {
     dsn = globals$dsn
     colr = globals$colr
     rangeLegend = globals$rangeLegend
-  
+    ccord = globals$ccord
+    
     # settings for plotting
     par(mai=c(0,0,0,0))
     par(oma=c(0,0,0,0))
     
     geo <- dsn[which(substr(dsn$KnKod,1,2) == "14"),]
     colr <- colr[which(substr(dsn$KnKod,1,2) == "14")]
+    ccord <- ccord[which(substr(ccord$code,1,2) == "14"),]
     plot(geo,xlim=geo@bbox[1,],ylim=geo@bbox[2,],col=colr,lwd=0.3)
-    
-    ### extract all centers of all municipalities
-    ccord = NULL # center coordinates and area
-    for (i in 1:length(geo$KnKod)) {
-      t = geo@polygons[[i]]@Polygons[[1]]@labpt # get center coords
-      s = geo@polygons[[i]]@Polygons[[1]]@area
-      u = data.frame(seq=i,code=geo$KnKod[i],name=geo$KnNamn[i],
-                     x=t[1],y=t[2],area=s,stringsAsFactors=F)
-      ccord = rbind(ccord,u)
-      rm(t,u,s)
-    }
-    Encoding(ccord$name) = "UTF-8"
-    
-    # CORRECTING centers for problematic regions
-    ccord$x[which(ccord$code=="1487")] = 1290000 # VÃ¤nersborg
-    ccord$x[which(ccord$code=="1485")] = 1275000 # Uddevalla
-    ccord$y[which(ccord$code=="1485")] = 6468000 # Uddevalla
-    ccord$y[which(ccord$code=="1493")] = 6505000 # Mariestad
-    ccord$x[which(ccord$code=="1493")] = 1380000 # Mariestad
-    ccord$y[which(ccord$code=="1489")] = 6425000 # AlingsÃ¥s
-    ccord$y[which(ccord$code=="1481")] = 6392000 # MÃ¶lndal
-    ccord$y[which(ccord$code=="1415")] = 6448000 # Stenungsund
-    ccord$y[which(ccord$code=="1438")] = 6560000 # Dals-Ed
-    ccord$y[which(ccord$code=="1401")] = 6398000 # HÃ¤rryda
-    ccord$x[which(ccord$code=="1401")] = 1299000 # HÃ¤rryda
-    ccord$y[which(ccord$code=="1465")] = 6363000 # Svenljunga
-    ccord$y[which(ccord$code=="1463")] = 6375000 # Mark
-    ccord$y[which(ccord$code=="1484")] = 6477000 # Lysekil
-    #text(ccord$x,ccord$y,ccord$code,cex=0.6)
     
     # areas that will be plotted next to the map but not in the legend
     codes_left = c("1438","1486","1435","1430","1427","1484","1485","1421","1415","1419","1482","1440","1407","1441")
     codes_diag = c("1480","1402","1481","1401","1463","1465")
     left = ccord[which(ccord$code %in% codes_left),]
     diag = ccord[which(ccord$code %in% codes_diag),]
-    
-    cntr = ccord[which( ! ccord$code %in% c(codes_left,codes_diag)),]
-    cntr = cntr[order(cntr$area),]
-    cntr$abbrev = seq(nrow(cntr))
-    text(cntr$x,cntr$y,cntr$abbrev,cex=0.3)
+
     
     #### next-to-map from the left with horizontal lines
     x_min = geo@bbox[1,1] - (geo@bbox[1,2]-geo@bbox[1,1])*0.02 # text position left
@@ -329,16 +296,11 @@ fun_gothenburg = function(globals) {
     for (i in 1:nrow(diag)) {
       if (diag$name[i]=="Mark") {
         x_min = geo@bbox[1,1] + (geo@bbox[1,2]-geo@bbox[1,1])*0.25
-      }
-      
-      if(diag$name[i]=="Svenljunga") {
+      } else if(diag$name[i]=="Svenljunga") {
         x_min = geo@bbox[1,1] + (geo@bbox[1,2]-geo@bbox[1,1])*0.40
+      } else {
+      	x_min = geo@bbox[1,1] + (geo@bbox[1,2]-geo@bbox[1,1])*0.05
       }
-      
-      if(! diag$name[i] %in% c("Mark","Svenljunga")) {
-        x_min = geo@bbox[1,1] + (geo@bbox[1,2]-geo@bbox[1,1])*0.05
-      }
-      
       
       t = diag[i,]
       xdif = abs(t$x-(x_min))
@@ -350,7 +312,9 @@ fun_gothenburg = function(globals) {
     }
     
     # county names to be plotted on the right side as a legend
-    righ = cntr
+    righ = ccord[which( ! ccord$code %in% c(codes_left,codes_diag)),]
+    righ$abbrev = rank(righ$area, ties.method = "first")
+    text(righ$x,righ$y,righ$abbrev,cex=0.3)
     
     # legend-type municipality names
     x_min = geo@bbox[1,2] + (geo@bbox[1,2]-geo@bbox[1,1])*0.0
@@ -371,6 +335,7 @@ fun_malmo = function(globals) {
     dsn = globals$dsn
     colr = globals$colr
     rangeLegend = globals$rangeLegend
+    ccord = globals$ccord
 
     # settings for plotting
     par(mai=c(0,0,0,0))
@@ -378,51 +343,28 @@ fun_malmo = function(globals) {
     
     geo <- dsn[which(substr(dsn$KnKod,1,2) == "12"),]
     colr <- colr[which(substr(dsn$KnKod,1,2) == "12")]
+    ccord <- ccord[which(substr(ccord$code,1,2) == "12"),]
     plot(geo,xlim=geo@bbox[1,],ylim=geo@bbox[2,],col=colr,lwd=0.3)
-    
-    ### extract all centers of all municipalities
-    ccord = NULL # center coordinates and area
-    for (i in 1:length(geo$KnKod)) {
-      t = geo@polygons[[i]]@Polygons[[1]]@labpt # get center coords
-      s = geo@polygons[[i]]@Polygons[[1]]@area
-      u = data.frame(seq=i,code=geo$KnKod[i],name=geo$KnNamn[i],
-                     x=t[1],y=t[2],area=s,stringsAsFactors=F)
-      ccord = rbind(ccord,u)
-      rm(t,u,s)
-    }
-    Encoding(ccord$name) = "UTF-8"
-    
-    # CORRECTING centers for problematic regions
-    ccord$x[which(ccord$code=="1273")] = 1390000 # Osby
-    ccord$x[which(ccord$code=="1231")] = 1328500 # BurlÃ¶v
-    ccord$x[which(ccord$code=="1291")] = 1401500 # Simrishamn
-    ccord$y[which(ccord$code=="1260")] = 6215000 # Bjuv
-    #ccord$y[which(ccord$code=="1230")] = 6175000 # Staffanstorp
-    #ccord$x[which(ccord$code=="1230")] = 1333500 # Staffanstorp
-    #text(ccord$x,ccord$y,ccord$code,cex=0.5)
     
     # areas that will be plotted next to the map but not in the legend
     codes_left = c("1292","1214","1278","1277","1284","1283","1282","1261","1260","1262","1231","1280","1233")
     left = ccord[which(ccord$code %in% codes_left),]
     
-    cntr = ccord[which( ! ccord$code %in% codes_left),]
-    cntr = cntr[order(cntr$area),]
-    cntr$abbrev = seq(nrow(cntr))
-    text(cntr$x,cntr$y,cntr$abbrev,cex=0.3)
-    
-    #### next-to-map from the left with horizontal lines
+    ## next-to-map from the left with horizontal lines
     x_min = geo@bbox[1,1] - (geo@bbox[1,2]-geo@bbox[1,1])*0.02 # text position left
     text(rep(x_min,nrow(left)),left$y,left$name,cex=0.4,pos=2)  # 0.4
     for (i in 1:nrow(left)) {
-      t = left[i,]
-      segments(x0=x_min-1000,x1=t$x,y0=t$y,y1=t$y,lwd=0.2)
-      points(t$x,t$y,pch=19,cex=0.2,col="red")
-      rm(t)
+    	t = left[i,]
+    	segments(x0=x_min-1000,x1=t$x,y0=t$y,y1=t$y,lwd=0.2)
+    	points(t$x,t$y,pch=19,cex=0.2,col="red")
+    	rm(t)
     }
     
-    # county names to be plotted on the right side as a legend
-    righ = cntr
-    
+    ## county names to be plotted on the right side as a legend
+    righ = ccord[which( ! ccord$code %in% codes_left),]
+    righ$abbrev = rank(righ$area, ties.method = "first")
+    text(righ$x,righ$y,righ$abbrev,cex=0.3)
+
     # legend-type municipality names
     x_min = geo@bbox[1,2] + (geo@bbox[1,2]-geo@bbox[1,1])*0.0
     y_max = geo@bbox[2,2] - (geo@bbox[2,2]-geo@bbox[2,1])*0.05 
@@ -442,6 +384,7 @@ fun_malmo = function(globals) {
 fun_plot_final = function(geo_dir, geo_data, variable_name, ownPalette, na_legend) {
     # load the geo coordinates, assign the globals
     globals = fun_loadGeo(geo_dir, geo_data, variable_name, ownPalette)
+    globals$ccord = correct_coords(globals$dsn)
     
     # split screen into 4 windows
     m = matrix(c(0,.7, 0,  1,    .58,1,.55,  1, 
