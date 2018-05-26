@@ -126,13 +126,21 @@ fun_sweden = function(globals, na_legend, ownPalette) {
     colr = globals$colr
     rangeLegend = globals$rangeLegend
     ccord = globals$ccord
+   	minimal = globals$minimal
+    
+    if(minimal){
+    	border = NA
+    	textSize = 0.7
+    } else {
+    	border = "black"
+    }
     
     # settings for plotting
     par(mai=c(0,0,0,0))
     par(oma=c(0,2,0,0))
     
     # plot geography with values for each area
-    plot(dsn,col=colr,lwd=0.3)
+    plot(dsn,col=colr,lwd=0.3, border=border)
     
     # some geo-areas will be plotted separately. mask them from the current plot
     geo <- dsn[which(substr(dsn$KnKod,1,2) %in% c("01","12","14")),]
@@ -140,44 +148,63 @@ fun_sweden = function(globals, na_legend, ownPalette) {
          add=T,lwd=1e-5,lty=0,col="mistyrose4")
     
     #########  ADD MAP NAMES/INDEXES AND LEGEND WITH NAMES OF THE AREAS
-    # types of municipalities
-    ccord$main = substr(ccord$code,1,2) %in% c("01","12","14") # MAIN (Gbg,Stock,Malm)
-    ccord$large = ccord$area > 5e9 # LARGE
+    # define main regions plotted separately (Gbg,Stock,Malm)
+    ccord$main = substr(ccord$code,1,2) %in% c("01","12","14")
 
     # which non-major municipalities are large enough to get their names ON the map
-    indx = which(!ccord$main & ccord$large)
-    text(ccord[indx,"x"],ccord[indx,"y"],ccord[indx,"name"], cex=0.3)
+    if(!minimal){
+    	ccord$large = ccord$area > 5e9
+    	indx = which(!ccord$main & ccord$large)
+    	text(ccord[indx,"x"],ccord[indx,"y"],ccord[indx,"name"], cex=0.3)
+    } else {
+    	ccord$large = FALSE
+    }
     
-    # which non-major municipalities are small enough to get their names in the legend
-    # (assign the areas with abbrev.number based on their size)
-    sub = ccord[which(!ccord$main & !ccord$large),]
-    sub$abbrev = rank(sub$area, ties.method = "first")
-    text(sub$x, sub$y, sub$abbrev, cex=0.27)
-    
-    sub = sub[order(sub$abbrev),]
-    clmn_fract = 0.6 # fraction of areas in the 1st column of the legend
-    sub1 = sub[1:floor(nrow(sub)*clmn_fract),]
-    sub2 = sub[(floor(nrow(sub)*clmn_fract)+1):nrow(sub),]
-    
-    x_min = dsn@bbox[1,1] - (dsn@bbox[1,2]-dsn@bbox[1,1])*0.15 # text position left
-    x_max = dsn@bbox[1,1] + (dsn@bbox[1,2]-dsn@bbox[1,1])*0.08 # text position right
-    y_max = dsn@bbox[2,2] + (dsn@bbox[2,2]-dsn@bbox[2,1])*0.0  # top text position
-    y_min = dsn@bbox[2,1] - (dsn@bbox[2,2]-dsn@bbox[2,1])*0.0  # bottom text position
-    
-    # first column of the legend
-    sub1$y_new = seq(from=y_max, to=y_min, length.out=nrow(sub1))
-    text(rep(x_min,nrow(sub1)),sub1$y_new,cex=0.4,pos=2,
-         labels = paste(sub1$name,sub1$abbrev,sep=" "),col="white",font=2)
-    text(rep(x_min,nrow(sub1)),sub1$y_new,cex=0.4,pos=2,
-         labels = paste(sub1$name,sub1$abbrev,sep=" "))
-    
-    # second column of the legend
-    sub2$y_new = sub1$y_new[1:nrow(sub2)]
-    text(rep(x_max,nrow(sub2)), sub2$y_new, cex=0.4, pos=2,
-         labels = paste(sub2$name, sub2$abbrev))
+    if(!minimal){
+    	# which non-major municipalities are small enough to get their names in the legend
+    	# (assign the areas with abbrev.number based on their size)
+    	sub = ccord[which(!ccord$main & !ccord$large),]
+    	sub$abbrev = rank(sub$area, ties.method = "first")
+    	
+    	sub = sub[order(sub$abbrev),]
+    	clmn_fract = 0.6 # fraction of areas in the 1st column of the legend
+    	sub1 = sub[1:floor(nrow(sub)*clmn_fract),]
+    	sub2 = sub[(floor(nrow(sub)*clmn_fract)+1):nrow(sub),]
+    	
+    	x_min = dsn@bbox[1,1] - (dsn@bbox[1,2]-dsn@bbox[1,1])*0.15 # text position left
+    	x_max = dsn@bbox[1,1] + (dsn@bbox[1,2]-dsn@bbox[1,1])*0.08 # text position right
+    	y_max = dsn@bbox[2,2] + (dsn@bbox[2,2]-dsn@bbox[2,1])*0.0  # top text position
+    	y_min = dsn@bbox[2,1] - (dsn@bbox[2,2]-dsn@bbox[2,1])*0.0  # bottom text position
+    	
+    	text(sub$x, sub$y, sub$abbrev, cex=0.27)
+    	
+    	# first column of the legend
+    	sub1$y_new = seq(from=y_max, to=y_min, length.out=nrow(sub1))
+    	text(rep(x_min,nrow(sub1)), sub1$y_new, cex=0.4, pos=2,
+    		 labels = paste(sub1$name, sub1$abbrev))
+    	
+    	# second column of the legend
+    	sub2$y_new = sub1$y_new[1:nrow(sub2)]
+    	text(rep(x_max,nrow(sub2)), sub2$y_new, cex=0.4, pos=2,
+    		 labels = paste(sub2$name, sub2$abbrev))
+    } else {
+    	# non-legend municipality names
+    	codes_right = c("0380", "0580", "2480", "1880", "0880")
+    	righ = ccord[which(ccord$code %in% codes_right),]
+    	x_max = geo@bbox[1,2] + (geo@bbox[1,2]-geo@bbox[1,1])*0.15 # text position right
+    	text(rep(x_max,nrow(righ)),righ$y,righ$name,cex=textSize,pos=4)
+    	
+    	# red points + lines to names
+    	points(righ$x, righ$y, pch=19,cex=0.2,col="red")
+    	segments(x0=x_max+2000,x1=righ$x, y0=righ$y, y1=righ$y, lwd=0.2)
+    }
     
     ## draw the legend (values for each color)
-    x = dsn@bbox[1,2] - (dsn@bbox[1,2]-dsn@bbox[1,1])*0.15
+    if(minimal){
+    	x = dsn@bbox[1,2] - (dsn@bbox[1,2]-dsn@bbox[1,1])*0.25
+    } else {
+    	x = dsn@bbox[1,2] - (dsn@bbox[1,2]-dsn@bbox[1,1])*0.15
+    }
     y = dsn@bbox[2,2] - (dsn@bbox[2,2]-dsn@bbox[2,1])*0.43
     
     ## add legend label for NAs, if any
@@ -202,56 +229,61 @@ fun_stockholm = function(globals) {
     colr = globals$colr
     rangeLegend = globals$rangeLegend
     ccord = globals$ccord
+    minimal = globals$minimal
 
     # settings for plotting
     par(mai=c(0,0,0,0))
-    #par(oma=c(0,0,0,0))
-    
+
     # plot geography with values for each area
     geo <- dsn[which(substr(dsn$KnKod,1,2) == "01"),]
     colr <- colr[which(substr(dsn$KnKod,1,2) == "01")]
     ccord <- ccord[which(substr(ccord$code,1,2) == "01"),]
-    plot(geo,xlim=geo@bbox[1,],ylim=geo@bbox[2,],lwd=0.3,col=colr)
-    
+
     # areas that will be plotted next to the map but not in the legend
-    codes_right = c("0188","0117","0187","0186","0120","0138","0136","0192")
-    codes_left = c("0125","0128","0140","0181")
+    if(minimal){
+    	codes_right = c()
+    	codes_left = c("0180")
+    	textSize = 0.65
+    	border = NA
+    } else {
+    	codes_right = c("0188","0117","0187","0186","0120","0138","0136","0192")
+    	codes_left = c("0125","0128","0140","0181")
+    	textSize = 0.4
+    	border = "black"
+    }
+    plot(geo,xlim=geo@bbox[1,],ylim=geo@bbox[2,],lwd=0.3, col=colr, border=border)
     
-    left = ccord[which(ccord$code %in% codes_left),]
-    righ = ccord[which(ccord$code %in% codes_right),]
-    
-    cntr = ccord[which( ! ccord$code %in% c(codes_left,codes_right)),]
-    cntr$abbrev = rank(cntr$area, ties.method = "first")
-    text(cntr$x,cntr$y,cntr$abbrev,cex=0.3)
-    
+    # left-side municipality-names
+    left = ccord[which(ccord$code %in% codes_left),]    	
     x_min = geo@bbox[1,1] - (geo@bbox[1,2]-geo@bbox[1,1])*0.02 # text position left
-    x_max = geo@bbox[1,2] - (geo@bbox[1,2]-geo@bbox[1,1])*0 # text position right
-    text(rep(x_min,nrow(left)),left$y,left$name,cex=0.4,pos=2)
-    text(rep(x_max,nrow(righ)),righ$y,righ$name,cex=0.4,pos=4)
+    text(rep(x_min,nrow(left)),left$y,left$name,cex=textSize,pos=2)
     
-    for (i in 1:nrow(left)) {
-      t = left[i,]
-      segments(x0=x_min-2000,x1=t$x,y0=t$y,y1=t$y,lwd=0.2)
-      points(t$x,t$y,pch=19,cex=0.2,col="red")
-      rm(t)
+    points(left$x, left$y, pch=19,cex=0.2,col="red")
+	segments(x0=x_min,x1=left$x, y0=left$y, y1=left$y, lwd=0.2)
+    
+    if(!minimal){
+    	# right-side municipality-names
+    	righ = ccord[which(ccord$code %in% codes_right),]
+    	x_max = geo@bbox[1,2] - (geo@bbox[1,2]-geo@bbox[1,1])*0 # text position right
+    	text(rep(x_max,nrow(righ)),righ$y,righ$name,cex=textSize,pos=4)
+    	
+    	# red points + lines to names
+    	points(righ$x, righ$y, pch=19,cex=0.2,col="red")
+    	segments(x0=x_max+2000,x1=righ$x, y0=righ$y, y1=righ$y, lwd=0.2)
+    	
+    	# legend-type municipality names
+    	cntr = ccord[which( ! ccord$code %in% c(codes_left,codes_right)),]
+    	cntr$abbrev = rank(cntr$area, ties.method = "first")
+    	text(cntr$x,cntr$y,cntr$abbrev,cex=0.3)
+    	
+    	x_min = geo@bbox[1,1] + (geo@bbox[1,2]-geo@bbox[1,1])*0.1 # text position left
+    	y_max = geo@bbox[2,2] - (geo@bbox[2,2]-geo@bbox[2,1])*0.05  # top text position
+    	y_min = geo@bbox[2,2] - (geo@bbox[2,2]-geo@bbox[2,1])*0.35  # bottom text position
+    	
+    	cntr$y_new = seq(from=y_max,to=y_min,length.out=nrow(cntr))
+    	text(rep(x_min,nrow(cntr)),cntr$y_new,cex=0.4,pos=2,
+    		 labels=paste(cntr$name,cntr$abbrev,sep="  "))
     }
-    
-    for (i in 1:nrow(righ)) {
-      t = righ[i,]
-      segments(x0=x_max+2000,x1=t$x,y0=t$y,y1=t$y,lwd=0.2)
-      points(t$x,t$y,pch=19,cex=0.2,col="red")
-      rm(t)
-    }
-    
-    
-    # legend-type municipality names
-    x_min = geo@bbox[1,1] + (geo@bbox[1,2]-geo@bbox[1,1])*0.1 # text position left
-    y_max = geo@bbox[2,2] - (geo@bbox[2,2]-geo@bbox[2,1])*0.05  # top text position
-    y_min = geo@bbox[2,2] - (geo@bbox[2,2]-geo@bbox[2,1])*0.35  # bottom text position
-    
-    cntr$y_new = seq(from=y_max,to=y_min,length.out=nrow(cntr))
-    text(rep(x_min,nrow(cntr)),cntr$y_new,cex=0.4,pos=2,
-         labels=paste(cntr$name,cntr$abbrev,sep="  "))
     
     # restore the default plotting parameters
     par(mar=c(5.1, 4.1, 4.1, 2.1))
@@ -264,35 +296,60 @@ fun_gothenburg = function(globals) {
     colr = globals$colr
     rangeLegend = globals$rangeLegend
     ccord = globals$ccord
+    minimal = globals$minimal
     
     # settings for plotting
     par(mai=c(0,0,0,0))
-    par(oma=c(0,0,0,0))
-    
+
     geo <- dsn[which(substr(dsn$KnKod,1,2) == "14"),]
     colr <- colr[which(substr(dsn$KnKod,1,2) == "14")]
     ccord <- ccord[which(substr(ccord$code,1,2) == "14"),]
-    plot(geo,xlim=geo@bbox[1,],ylim=geo@bbox[2,],col=colr,lwd=0.3)
+    
+    if(minimal){
+    	codes_left = c()
+    	codes_diag = c("1480")
+    	textSize = 0.65
+    	border = NA
+    } else {
+    	codes_diag = c("1480","1402","1481","1401","1463","1465")
+    	codes_left = c("1438","1486","1435","1430","1427","1484","1485","1421",
+    				   "1415","1419","1482","1440","1407","1441")
+    	textSize = 0.4
+    	border = "black"
+    }
+    plot(geo,xlim=geo@bbox[1,],ylim=geo@bbox[2,],col=colr, lwd=0.3, border=border)
     
     # areas that will be plotted next to the map but not in the legend
-    codes_left = c("1438","1486","1435","1430","1427","1484","1485","1421","1415","1419","1482","1440","1407","1441")
-    codes_diag = c("1480","1402","1481","1401","1463","1465")
-    left = ccord[which(ccord$code %in% codes_left),]
-    diag = ccord[which(ccord$code %in% codes_diag),]
-
     
     #### next-to-map from the left with horizontal lines
-    x_min = geo@bbox[1,1] - (geo@bbox[1,2]-geo@bbox[1,1])*0.02 # text position left
-    text(rep(x_min,nrow(left)),left$y,left$name,cex=0.4,pos=2)  # 0.4
-    for (i in 1:nrow(left)) {
-      t = left[i,]
-      segments(x0=x_min-1000,x1=t$x,y0=t$y,y1=t$y,lwd=0.2)
-      points(t$x,t$y,pch=19,cex=0.2,col="red")
-      rm(t)
+    if(!minimal){
+    	left = ccord[which(ccord$code %in% codes_left),]
+    	x_min = geo@bbox[1,1] - (geo@bbox[1,2]-geo@bbox[1,1])*0.02 # text position left
+    	
+    	text(rep(x_min,nrow(left)),left$y,left$name, cex=textSize, pos=2)
+    	points(left$x, left$y, pch=19, cex=0.2, col="red")
+    	segments(x0=x_min-1000,x1=left$x, y0=left$y,y1=left$y, lwd=0.2)
+    	
+    	# county names to be plotted on the right side as a legend
+    	righ = ccord[which( ! ccord$code %in% c(codes_left,codes_diag)),]
+    	righ$abbrev = rank(righ$area, ties.method = "first")
+    	text(righ$x,righ$y,righ$abbrev,cex=0.3)
+    	
+    	# legend-type municipality names
+    	x_min = geo@bbox[1,2] + (geo@bbox[1,2]-geo@bbox[1,1])*0.0
+    	y_max = geo@bbox[2,2] - (geo@bbox[2,2]-geo@bbox[2,1])*0 
+    	y_min = geo@bbox[2,1] - (geo@bbox[2,2]-geo@bbox[2,1])*0 
+    	
+    	righ$y_new = seq(from=y_max,to=y_min,length.out=nrow(righ))
+    	text(rep(x_min,nrow(righ)),righ$y_new, cex=textSize,pos=4,
+    		 labels=paste(righ$abbrev,righ$name,sep=" "))
     }
     
     #### next-to-map from the left with diagonal lines
+    diag = ccord[which(ccord$code %in% codes_diag),]
     angle_rad = 0.7
+    points(diag$x,diag$y,pch=19,cex=0.2,col="red")
+    
     for (i in 1:nrow(diag)) {
       if (diag$name[i]=="Mark") {
         x_min = geo@bbox[1,1] + (geo@bbox[1,2]-geo@bbox[1,1])*0.25
@@ -303,27 +360,13 @@ fun_gothenburg = function(globals) {
       }
       
       t = diag[i,]
-      xdif = abs(t$x-(x_min))
-      ydif = tan(angle_rad)*xdif
+      xdif = abs(t$x - x_min)
+      ydif = tan(angle_rad) * xdif
       segments(x0=x_min,x1=t$x,y0=t$y-ydif,y1=t$y,lwd=0.2)
-      text(x_min+2000,t$y-ydif,t$name,cex=0.4,pos=2)  # 0.4
-      points(t$x,t$y,pch=19,cex=0.2,col="red")
+      text(x_min+2000,t$y-ydif,t$name, cex=textSize,pos=2)
+
       rm(t)
     }
-    
-    # county names to be plotted on the right side as a legend
-    righ = ccord[which( ! ccord$code %in% c(codes_left,codes_diag)),]
-    righ$abbrev = rank(righ$area, ties.method = "first")
-    text(righ$x,righ$y,righ$abbrev,cex=0.3)
-    
-    # legend-type municipality names
-    x_min = geo@bbox[1,2] + (geo@bbox[1,2]-geo@bbox[1,1])*0.0
-    y_max = geo@bbox[2,2] - (geo@bbox[2,2]-geo@bbox[2,1])*0 
-    y_min = geo@bbox[2,1] - (geo@bbox[2,2]-geo@bbox[2,1])*0 
-    
-    righ$y_new = seq(from=y_max,to=y_min,length.out=nrow(righ))
-    text(rep(x_min,nrow(righ)),righ$y_new,cex=0.4,pos=4,
-         labels=paste(righ$abbrev,righ$name,sep=" "))
     
     # restore the default plotting parameters
     par(mar=c(5.1, 4.1, 4.1, 2.1))
@@ -336,43 +379,51 @@ fun_malmo = function(globals) {
     colr = globals$colr
     rangeLegend = globals$rangeLegend
     ccord = globals$ccord
+    minimal = globals$minimal
 
     # settings for plotting
     par(mai=c(0,0,0,0))
-    #par(oma=c(0,0,0,0))
     
     geo <- dsn[which(substr(dsn$KnKod,1,2) == "12"),]
     colr <- colr[which(substr(dsn$KnKod,1,2) == "12")]
     ccord <- ccord[which(substr(ccord$code,1,2) == "12"),]
-    plot(geo,xlim=geo@bbox[1,],ylim=geo@bbox[2,],col=colr,lwd=0.3)
+    
+    if(minimal){
+    	codes_left = c("1280")
+    	textSize = 0.65
+    	border = NA
+    } else {
+    	codes_left = c("1292","1214","1278","1277","1284","1283","1282","1261",
+    				   "1260","1262","1231","1280","1233")
+    	textSize = 0.4
+    	border = "black"
+    }
+    plot(geo,xlim=geo@bbox[1,],ylim=geo@bbox[2,],col=colr, lwd=0.3, border=border)
     
     # areas that will be plotted next to the map but not in the legend
-    codes_left = c("1292","1214","1278","1277","1284","1283","1282","1261","1260","1262","1231","1280","1233")
     left = ccord[which(ccord$code %in% codes_left),]
     
     ## next-to-map from the left with horizontal lines
     x_min = geo@bbox[1,1] - (geo@bbox[1,2]-geo@bbox[1,1])*0.02 # text position left
-    text(rep(x_min,nrow(left)),left$y,left$name,cex=0.4,pos=2)  # 0.4
-    for (i in 1:nrow(left)) {
-    	t = left[i,]
-    	segments(x0=x_min-1000,x1=t$x,y0=t$y,y1=t$y,lwd=0.2)
-    	points(t$x,t$y,pch=19,cex=0.2,col="red")
-    	rm(t)
+    text(rep(x_min,nrow(left)),left$y,left$name, cex=textSize,pos=2)
+    points(left$x,left$y, pch=19,cex=0.2,col="red")
+    segments(x0=x_min-1000,x1=left$x, y0=left$y,y1=left$y, lwd=0.2)
+    
+    if(!minimal){
+    	## county names to be plotted on the right side as a legend
+    	righ = ccord[which( ! ccord$code %in% codes_left),]
+    	righ$abbrev = rank(righ$area, ties.method = "first")
+    	text(righ$x,righ$y,righ$abbrev,cex=0.3)
+    	
+    	# legend-type municipality names
+    	x_min = geo@bbox[1,2] + (geo@bbox[1,2]-geo@bbox[1,1])*0.0
+    	y_max = geo@bbox[2,2] - (geo@bbox[2,2]-geo@bbox[2,1])*0.05 
+    	y_min = geo@bbox[2,1] + (geo@bbox[2,2]-geo@bbox[2,1])*0.05 
+    	
+    	righ$y_new = seq(from=y_max,to=y_min,length.out=nrow(righ))
+    	text(rep(x_min,nrow(righ)),righ$y_new,cex=0.4,pos=4,
+    		 labels=paste(righ$abbrev,righ$name,sep=" "))
     }
-    
-    ## county names to be plotted on the right side as a legend
-    righ = ccord[which( ! ccord$code %in% codes_left),]
-    righ$abbrev = rank(righ$area, ties.method = "first")
-    text(righ$x,righ$y,righ$abbrev,cex=0.3)
-
-    # legend-type municipality names
-    x_min = geo@bbox[1,2] + (geo@bbox[1,2]-geo@bbox[1,1])*0.0
-    y_max = geo@bbox[2,2] - (geo@bbox[2,2]-geo@bbox[2,1])*0.05 
-    y_min = geo@bbox[2,1] + (geo@bbox[2,2]-geo@bbox[2,1])*0.05 
-    
-    righ$y_new = seq(from=y_max,to=y_min,length.out=nrow(righ))
-    text(rep(x_min,nrow(righ)),righ$y_new,cex=0.4,pos=4,
-         labels=paste(righ$abbrev,righ$name,sep=" "))
     
     # restore the default plotting parameters
     par(mar=c(5.1, 4.1, 4.1, 2.1))
@@ -381,15 +432,24 @@ fun_malmo = function(globals) {
 
 ############    plot all 4 windows 
 
-fun_plot_final = function(geo_dir, geo_data, variable_name, ownPalette, na_legend) {
+fun_plot_final = function(geo_dir, geo_data, variable_name, ownPalette, na_legend, minimal=F) {
     # load the geo coordinates, assign the globals
     globals = fun_loadGeo(geo_dir, geo_data, variable_name, ownPalette)
     globals$ccord = correct_coords(globals$dsn)
+    globals$minimal = minimal
     
     # split screen into 4 windows
-    m = matrix(c(0,.7, 0,  1,    .58,1,.55,  1, 
-                 .58, 1,.25,.55,   .58,1,  0,.25),
-               nr=4,nc=4,byrow = T)
+    if(!minimal){
+    	# with space for legends
+    	m = matrix(c(0,.7, 0,  1,    .58,1,.55,  1, 
+    				 .58, 1,.25,.55,   .58,1,  0,.25),
+    				 nr=4,nc=4,byrow = T)
+    } else {
+    	# tight
+    	m = matrix(c(0,.55, 0,  1,    .45,1,.55,  1, 
+    				 .45, 1,.25,.55,   .45,1,  0,.25),
+    				 nr=4,nc=4,byrow = T)
+    }
     
     # fill the windows with geographical/meta/medical data
     split.screen(m)

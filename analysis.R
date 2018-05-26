@@ -43,14 +43,32 @@ spont = filter(m, FLSPONT==1, is.na(FLINDUKT))
 spont = filter(spont, ELEKAKUT==2 | is.na(ELEKAKUT) & is.na(SECFORE))
 iatr = anti_join(m, spont, by="lpnr_BARN")
 
+nonmiss = filter(m, !is.na(ROK1), !is.na(PARITET), !is.na(nonswed_mother),
+				 !is.na(edu_cat), !is.na(KON), !is.na(AR), !is.na(DIABETES),
+				 !is.na(HYPERTON), !is.na(GRMETOD), !is.na(flan_kom))
+table(nonmiss$age_cat)
+table(nonmiss$ROK1)
+table(nonmiss$PARITET)
+table(nonmiss$nonswed_mother)
+table(nonmiss$edu_cat)
+table(nonmiss$KON)
+table(nonmiss$DIABETES)
+table(nonmiss$HYPERTON)
+table(nonmiss$GRMETOD)
 
 ### RUN A REGRESSION TO GET ADJUSTED GA OR PROVINCE EFFECTS
-fitRegression = function(df, name, useFE = FALSE){
+fitRegression = function(df, name, useFE = FALSE, useRE = FALSE){
 	if(useFE){
 		name = paste("KommunFE", name, sep="_")
 		linearreg = lm(GRDBS ~ age_cat + MLANGD + ROK1 + PARITET + nonswed_mother + 
 					   	edu_cat + KON + AR + DIABETES + HYPERTON + GRMETOD + flan_kom,
 					   na.action = na.exclude, data = df, model=F)
+	} else if(useRE) {
+		name = paste("KommunRE", name, sep="_")
+		# include lan_kom as a random effect
+		linearreg = lmer(GRDBS ~ age_cat + MLANGD + ROK1 + PARITET + nonswed_mother + 
+			 			edu_cat + KON + AR + DIABETES + HYPERTON + GRMETOD + (1|flan_kom),
+			 		   na.action = na.exclude, data = df, REML=T)
 	} else {
 		# do not include lan_kom in the model
 		linearreg = lm(GRDBS ~ age_cat + MLANGD + ROK1 + PARITET + nonswed_mother + 
@@ -126,7 +144,7 @@ summarizeKommun = function(df, lmObject, name, useFE = FALSE){
 ### PLOT, anything
 makeMaps = function(kommunSum, name){
 	# pad lan_kom with zeroes
-	kommunSum$lan_kom = sprintf("%04d", kommunSum$lan_kom)
+	# kommunSum$lan_kom = sprintf("%04d", kommunSum$lan_kom)
 
 	# make complete maps without caring about significance
 	na_legend = NA
@@ -140,21 +158,41 @@ makeMaps = function(kommunSum, name){
 	pdf(paste("plots/FINAL_", name, "_adj_PTD.pdf", sep=""), width=9.5, height=8)
 	fun_plot_final(geo_dir, as.data.frame(kommunSum), "rate", ownPalette, na_legend)
 	dev.off()
-	
+
 	# now color only regions which kind of reliably differ from mean PTD rate
 	# significance cutoff:
+	## FDR
 	kommunSum$GA_q = p.adjust(kommunSum$GA_p, method="fdr")
 	kommunSumPlot = filter(kommunSum, !is.na(rate), GA_q<0.1)
 	na_legend = "FDR > 10%"
+	
+	ownPalette = brewer.pal(10, "RdYlGn")
+	pdf(paste("plots/FINAL_", name, "_adj_GA_q010.pdf", sep=""), width=9.5, height=8)
+	fun_plot_final(geo_dir, as.data.frame(kommunSumPlot), "mean", ownPalette, na_legend)
+	dev.off()
+	
+	## P-VALUE
+	kommunSumPlot = filter(kommunSum, !is.na(rate), GA_p<0.1)
+	na_legend = "p > 0.1"
 	
 	ownPalette = brewer.pal(10, "RdYlGn")
 	pdf(paste("plots/FINAL_", name, "_adj_GA_p010.pdf", sep=""), width=9.5, height=8)
 	fun_plot_final(geo_dir, as.data.frame(kommunSumPlot), "mean", ownPalette, na_legend)
 	dev.off()
 	
+	## FDR
 	kommunSum$PTD_q = p.adjust(kommunSum$PTD_p, method="fdr")
 	kommunSumPlot = filter(kommunSum, !is.na(rate), PTD_q<0.1)
 	na_legend = "FDR > 10%"
+	
+	ownPalette = rev(brewer.pal(10, "RdYlGn"))
+	pdf(paste("plots/FINAL_", name, "_adj_PTD_q010.pdf", sep=""), width=9.5, height=8)
+	fun_plot_final(geo_dir, as.data.frame(kommunSumPlot), "rate", ownPalette, na_legend)
+	dev.off()
+
+	## P-VALUE
+	kommunSumPlot = filter(kommunSum, !is.na(rate), PTD_p<0.1)
+	na_legend = "p > 0.1"
 	
 	ownPalette = rev(brewer.pal(10, "RdYlGn"))
 	pdf(paste("plots/FINAL_", name, "_adj_PTD_p010.pdf", sep=""), width=9.5, height=8)
@@ -162,32 +200,81 @@ makeMaps = function(kommunSum, name){
 	dev.off()
 }
 
+## function for MAIN FIGURE plots:
+## minimal plots and .eps format
+makeMapsPubl = function(kommunSum, name){
+	# make complete map without caring about significance
+	na_legend = NA
+	ownPalette = rev(brewer.pal(10, "RdYlGn"))
+	
+	pdf(paste("plots/MINIMAL_", name, "_adj_PTD.pdf", sep=""), width=7, height=8)
+	fun_plot_final(geo_dir, as.data.frame(kommunSum), "rate", ownPalette, na_legend, minimal=T)
+	dev.off()
+	
+	setEPS()
+	postscript(paste("plots/MINIMAL_", name, "_adj_PTD.eps", sep=""), width=7, height=8)
+	fun_plot_final(geo_dir, as.data.frame(kommunSum), "rate", ownPalette, na_legend, minimal=T)
+	dev.off()
+	
+	# now color only regions which kind of reliably differ from mean PTD rate
+	# significance cutoff:
+	## FDR
+	kommunSum$PTD_q = p.adjust(kommunSum$PTD_p, method="fdr")
+	kommunSumPlot = filter(kommunSum, !is.na(rate), PTD_q<0.1)
+	na_legend = "FDR > 10%"
+	
+	pdf(paste("plots/MINIMAL_", name, "_adj_PTD_q010.pdf", sep=""), width=7, height=8)
+	fun_plot_final(geo_dir, as.data.frame(kommunSumPlot), "rate", ownPalette, na_legend, minimal=T)
+	dev.off()
+	
+	setEPS()
+	postscript(paste("plots/MINIMAL_", name, "_adj_PTD_q010.eps", sep=""), width=7, height=8)
+	fun_plot_final(geo_dir, as.data.frame(kommunSumPlot), "rate", ownPalette, na_legend, minimal=T)
+	dev.off()
+	
+	## P-VALUE
+	kommunSumPlot = filter(kommunSum, !is.na(rate), PTD_p<0.1)
+	na_legend = "p > 0.1"
+	
+	pdf(paste("plots/MINIMAL_", name, "_adj_PTD_p010.pdf", sep=""), width=7, height=8)
+	fun_plot_final(geo_dir, as.data.frame(kommunSumPlot), "rate", ownPalette, na_legend, minimal=T)
+	dev.off()
+	
+	setEPS()
+	postscript(paste("plots/MINIMAL_", name, "_adj_PTD_p010.eps", sep=""), width=7, height=8)
+	fun_plot_final(geo_dir, as.data.frame(kommunSumPlot), "rate", ownPalette, na_legend, minimal=T)
+	dev.off()
+}
+
 ### ADJUST AND PLOT SPONT; IATR; ALL
-modspont = fitRegression(spont, "spont", FALSE)
+modspont = fitRegression(spont, "spont", FALSE, FALSE)
 sumspont = summarizeKommun(spont, modspont, "spont", FALSE)
 makeMaps(sumspont, "spont")
 
-modiatr = fitRegression(iatr, "iatr", FALSE)
+modiatr = fitRegression(iatr, "iatr", FALSE, FALSE)
 sumiatr = summarizeKommun(iatr, modiatr, "iatr", FALSE)
 makeMaps(sumiatr, "iatr")
 
-modall = fitRegression(m, "all", FALSE)
+modall = fitRegression(m, "all", FALSE, FALSE)
 sumall = summarizeKommun(m, modall, "all", FALSE)
 makeMaps(sumall, "all")
 
 
 ### FIT KOMMUN-LEVEL FIXED EFFECTS & DECOMPOSE VARIANCE
-modspont = fitRegression(spont, "spont", TRUE)
+modspont = fitRegression(spont, "spont", TRUE, FALSE)
 sumspont = summarizeKommun(spont, modspont, "spont", TRUE)
 makeMaps(sumspont, "spont_KommunFE")
 
-modiatr = fitRegression(iatr, "iatr", TRUE)
+modiatr = fitRegression(iatr, "iatr", TRUE, FALSE)
 sumiatr = summarizeKommun(iatr, modiatr, "iatr", TRUE)
 makeMaps(sumiatr, "iatr_KommunFE")
 
-modall = fitRegression(m, "all", TRUE)
+modall = fitRegression(m, "all", TRUE, FALSE)
 sumall = summarizeKommun(m, modall, "all", TRUE)
 makeMaps(sumall, "all_KommunFE")
+
+### MAIN FIGURE PLOTS
+makeMapsPubl(sumall, "all_KommunFE")
 
 # variance attributed to the added lan_kom factor:
 modspont$r.squared; modspontfe$r.squared; modspontfe$r.squared - modspont$r.squared
@@ -246,3 +333,106 @@ plotFunnel(sumspont, "spont_KommunFE", var(spont$GRDBS)*0.984, FALSE)
 plotFunnel(sumiatr, "iatr_KommunFE", var(iatr$GRDBS)*0.971, FALSE)
 plotFunnel(sumall, "all_KommunFE", var(m$GRDBS)*0.983, FALSE)
 
+
+##### spam
+
+load("model_lm_KommunFE_spont.RData")
+library(broom)
+library(lme4)
+library(nlme)
+
+### EXPLORE RANDOM EFFECTS
+modspont = fitRegression(spont, "spont", FALSE, TRUE)
+modiatr = fitRegression(iatr, "iatr", FALSE, TRUE)
+modall = fitRegression(m, "all", FALSE, TRUE)
+
+res = tidy(linearreg)
+betasRE = tidy(modspont)
+betasFE = filter(res, !grepl("flan", term))
+bind_rows(rand=betasRE, fixed=betasFE, .id="effects") %>%
+	filter(term!="(Intercept)", term!="DIABETESTRUE", !is.na(std.error)) %>%
+	ggplot(aes(x=term, color=effects)) +
+	geom_pointrange(aes(y=estimate, ymin=estimate-1.96*std.error, ymax=estimate+1.96*std.error),
+					position=position_dodge(width=1), size=0.3) +
+	ylab(expression(paste("estimated ",  beta))) +
+	theme_bw() + theme(axis.text.x=element_text(angle=90))
+
+provbetasRE = ranef(modspont)$flan_kom
+provbetasRE = data.frame(estimate = provbetasRE[,1] - provbetasRE[1,1],
+						 term=paste("flan_kom", rownames(provbetasRE), sep=""))
+provbetasFE = filter(res, grepl("flan", term))
+ns = group_by(spont, flan_kom) %>%
+	summarize(n=n()) %>%
+	mutate(flan_kom=paste("flan_kom", flan_kom, sep=""))
+
+bind_rows(fixed=provbetasFE, rand=provbetasRE, .id="effects") %>%
+	inner_join(ns, by=c("term"="flan_kom")) %>%
+	filter(n>100) %>%
+	ggplot() + geom_density(aes(x=estimate, fill=effects), alpha=0.3) + theme_bw()
+table(ns$flan_kom[ns$n>100] %in% sprintf("flan_kom%i", as.numeric(provnames$lan_kom)))
+inner_join(provbetasFE, provbetasRE, by="term") %>% 
+	inner_join(ns, by=c("term"="flan_kom")) %>%
+	filter(n>100) %>%
+	ggplot() + geom_point(aes(x=estimate.y, y=estimate.x)) +
+	geom_abline(slope=1, intercept=0, col="red") + 
+	coord_equal(xlim=c(-2.5,1.5), ylim=c(-2.5,1.5)) +
+	ylab("fixed eff") + xlab("random eff") + theme_bw()
+
+
+### MAP INTERACTIONS
+
+load("model_lm_KommunFE_spont.RData")
+length(linearreg$residuals)
+length(spontnm$AR)
+
+
+spontnm = filter(spont, !is.na(GRDBS), !is.na(age_cat), !is.na(MLANGD),
+				 !is.na(ROK1), !is.na(PARITET), !is.na(nonswed_mother),
+				 !is.na(edu_cat), !is.na(KON), !is.na(AR), !is.na(DIABETES),
+				 !is.na(HYPERTON), !is.na(GRMETOD), !is.na(flan_kom))
+spontnm$GA_adj = linearreg$residuals + mean(spontnm$GRDBS)
+qplot(spontnm$GA_adj)
+
+#table(cut(spont$AR, include.lowest = T, breaks=c(1998, 2003, 2008, 2013)))
+spontnm$period = cut(spontnm$AR, include.lowest = T, breaks=c(1998, 2005, 2013))
+spontnm_sum = group_by(spontnm, flan_kom, period) %>%
+	summarize(n=n(), mean = mean(GA_adj, na.rm=T), rate = mean(GA_adj<259, na.rm=T)) %>%
+	mutate(nprov = sum(n))
+spontnm_sum = mutate(spontnm_sum, areaNum = as.numeric(substr(sprintf("%04s", flan_kom), 1, 2)))
+spontnm_sum$area = "other"
+spontnm_sum$area[which(spontnm_sum$areaNum==1)] = "Stockholm"
+spontnm_sum$area[which(spontnm_sum$areaNum==12)] = "Skåne"
+spontnm_sum$area[which(spontnm_sum$areaNum==14)] = "Göteborg"
+spontnm_sum$area = factor(spontnm_sum$area, levels=c("Stockholm", "Göteborg", "Skåne", "other"))
+
+filter(spontnm_sum, nprov>100) %>%
+	mutate(size = cut(nprov, include.lowest=T, breaks=c(1e2, 5e2, 1e3, 2e3, 5e3, 1e4, 3e5))) %>%
+	ggplot(aes(x=period, y=mean)) + geom_line(aes(group=flan_kom)) +
+	facet_wrap(~area) +
+	theme_bw()
+
+
+# pad lan_kom with zeroes
+spontnm_sum$lan_kom = sprintf("%04d", as.numeric(as.character(spontnm_sum$flan_kom)))
+spontnm_sum = filter(spontnm_sum, n>=100)
+spontnm_plot = spread(spontnm_sum[,c("lan_kom", "period", "mean")], period, value=mean) %>%
+	mutate(change = `(2005,2013]`-`[1998,2005]`) %>% filter(!is.na(change))
+na_legend = "n<100"
+
+ownPalette = brewer.pal(10, "RdYlGn")
+name = "interactions"
+pdf(paste("plots/FINAL_", name, "_adj_GA.pdf", sep=""), width=9.5, height=8)
+fun_plot_final(geo_dir, as.data.frame(spontnm_plot), "change", ownPalette, na_legend)
+dev.off()
+
+
+#### TEMP
+sumall = read.table("sum_kommundata_KommunFE_all.csv", h=T)
+
+ownPalette = rev(brewer.pal(10, "RdYlGn"))
+sumall$lan_kom = sprintf("%04d", sumall$lan_kom)
+na_legend = NA
+
+pdf(paste("plots/TEST_all_KommunFE_adj_PTD.pdf", sep=""), width=7, height=8)
+fun_plot_final(geo_dir, as.data.frame(sumall), "rate", ownPalette, na_legend, minimal=T)
+dev.off()
